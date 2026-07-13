@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type QueueStatus = {
   queue_name: string
@@ -14,12 +16,12 @@ export function useQueueStatus() {
   return useQuery({
     queryKey: [QUERY_KEYS.QUEUES],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("pgmq_queues")
         .select("*")
 
       if (error) {
-        const { data: fallback, error: fallbackError } = await supabase
+        const { data: fallback, error: fallbackError } = await getSupabase()
           .rpc("get_queue_status")
 
         if (fallbackError) throw fallbackError

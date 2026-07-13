@@ -4,7 +4,9 @@ import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type UserProfile = {
   id: string
@@ -18,7 +20,7 @@ export function useUsers() {
   return useQuery({
     queryKey: [QUERY_KEYS.USERS],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false })
@@ -33,7 +35,7 @@ export function useUser(id: string) {
   return useQuery({
     queryKey: [QUERY_KEYS.USER, id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("profiles")
         .select("*")
         .eq("id", id)
@@ -56,7 +58,7 @@ export function useUpdateUser() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: UserInput & { id: string }) => {
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("profiles")
         .update(input)
         .eq("id", id)
@@ -75,7 +77,7 @@ export function useUsersStats() {
   return useQuery({
     queryKey: [QUERY_KEYS.USERS, "stats"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("role")
+      const { data, error } = await getSupabase().from("profiles").select("role")
       if (error) throw error
       const rows = data as { role: string | null }[]
       return {

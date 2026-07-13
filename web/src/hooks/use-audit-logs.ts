@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type AuditLog = {
   id: string
@@ -26,7 +28,7 @@ export function useAuditLogs(filters?: AuditLogFilters) {
   return useQuery({
     queryKey: [QUERY_KEYS.AUDIT_LOGS, filters],
     queryFn: async () => {
-      let query = supabase
+      let query = getSupabase()
         .from("audit_logs")
         .select("*")
         .order("created_at", { ascending: false })
@@ -48,7 +50,7 @@ export function useAuditLogActions() {
   return useQuery({
     queryKey: [QUERY_KEYS.AUDIT_LOGS, "actions"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("audit_logs")
         .select("action")
 
@@ -63,7 +65,7 @@ export function useAuditLogEntityTypes() {
   return useQuery({
     queryKey: [QUERY_KEYS.AUDIT_LOGS, "entity-types"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("audit_logs")
         .select("entity_type")
 

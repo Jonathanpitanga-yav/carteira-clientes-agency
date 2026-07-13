@@ -4,7 +4,9 @@ import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type Integration = {
   id: string
@@ -21,7 +23,7 @@ export function useIntegrations() {
   return useQuery({
     queryKey: [QUERY_KEYS.INTEGRATIONS],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("client_applications")
         .select(`
           *,
@@ -51,7 +53,7 @@ export function useDeleteIntegration() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("client_applications")
         .update({ status: "inactive" })
         .eq("id", id)
@@ -69,7 +71,7 @@ export function useDeleteIntegration() {
 export function useSyncIntegration() {
   return useMutation({
     mutationFn: async (appId: string) => {
-      const { error } = await supabase.functions.invoke("erp-sync-data", {
+      const { error } = await getSupabase().functions.invoke("erp-sync-data", {
         body: { appId },
       })
 

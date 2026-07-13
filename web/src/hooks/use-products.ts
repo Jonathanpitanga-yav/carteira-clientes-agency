@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type ProductRanking = {
   product_id: string | null
@@ -19,7 +21,7 @@ export function useProductRanking(clientId?: string) {
   return useQuery({
     queryKey: [QUERY_KEYS.PRODUCTS, clientId],
     queryFn: async () => {
-      let query = supabase
+      let query = getSupabase()
         .from("product_ranking")
         .select("*")
         .order("total_revenue", { ascending: false })

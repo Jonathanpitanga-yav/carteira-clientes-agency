@@ -4,7 +4,9 @@ import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type ApiToken = {
   id: string
@@ -21,7 +23,7 @@ export function useApiTokens() {
   return useQuery({
     queryKey: [QUERY_KEYS.API_TOKENS],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("api_tokens")
         .select("*")
         .order("created_at", { ascending: false })
@@ -41,7 +43,7 @@ export function useCreateApiToken() {
       permissions?: string[]
       expires_at?: string
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("api_tokens")
         .insert(input)
         .select("prefix")
@@ -65,7 +67,7 @@ export function useRevokeApiToken() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("api_tokens")
         .update({ status: "revoked" })
         .eq("id", id)

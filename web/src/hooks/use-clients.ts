@@ -4,7 +4,9 @@ import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 export type Client = {
   id: string
@@ -25,7 +27,7 @@ export function useClients() {
   return useQuery({
     queryKey: [QUERY_KEYS.CLIENTS],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("clients")
         .select("*")
         .order("name")
@@ -40,7 +42,7 @@ export function useClient(id: string) {
   return useQuery({
     queryKey: [QUERY_KEYS.CLIENT, id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("clients")
         .select("*")
         .eq("id", id)
@@ -58,7 +60,7 @@ export function useCreateClient() {
 
   return useMutation({
     mutationFn: async (input: ClientInput) => {
-      const { error } = await supabase.from("clients").insert(input)
+      const { error } = await getSupabase().from("clients").insert(input)
       if (error) throw error
     },
     onSuccess: () => {
@@ -74,7 +76,7 @@ export function useUpdateClient() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: ClientInput & { id: string }) => {
-      const { error } = await supabase.from("clients").update(input).eq("id", id)
+      const { error } = await getSupabase().from("clients").update(input).eq("id", id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -90,7 +92,7 @@ export function useDeleteClient() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("clients").delete().eq("id", id)
+      const { error } = await getSupabase().from("clients").delete().eq("id", id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -105,7 +107,7 @@ export function useClientsStats() {
   return useQuery({
     queryKey: [QUERY_KEYS.CLIENTS, "stats"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("status")
+      const { data, error } = await getSupabase().from("clients").select("status")
       if (error) throw error
       const rows = data as { status: string }[]
       return {

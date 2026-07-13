@@ -12,9 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatCurrency } from "@/lib/utils/format"
 
-const supabase = createClient()
-
 export default function ClientOrdersPage() {
+  const supabase = createClient()
   const { data: orders, isLoading } = useQuery({
     queryKey: [QUERY_KEYS.CLIENT, "orders"],
     queryFn: async () => {

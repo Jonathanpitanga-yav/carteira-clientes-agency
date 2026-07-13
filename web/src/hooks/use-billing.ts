@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 
-const supabase = createClient()
+function getSupabase() {
+  return createClient()
+}
 
 type MonthlyBillingRow = {
   client_id: string | null
@@ -25,7 +27,7 @@ export function useMonthlyBilling(clientId?: string) {
   return useQuery({
     queryKey: [QUERY_KEYS.BILLING, clientId],
     queryFn: async () => {
-      let query = supabase
+      let query = getSupabase()
         .from("client_monthly_billing")
         .select("*")
         .order("year_month", { ascending: false })
@@ -43,7 +45,7 @@ export function useDailyBilling(clientId?: string) {
   return useQuery({
     queryKey: [QUERY_KEYS.DAILY_BILLING, clientId],
     queryFn: async () => {
-      let query = supabase
+      let query = getSupabase()
         .from("daily_billing")
         .select("*")
         .order("date", { ascending: false })
