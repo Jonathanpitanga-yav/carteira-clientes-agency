@@ -2,150 +2,138 @@
 
 ## Visão Geral
 
-Cada ERP possui um adapter que implementa a interface `IERPAdapter`. O sistema roteia chamadas para o adapter correto via `registry.ts`.
+Todos os fluxos de integração com ERPs: OAuth2, webhooks, sincronização manual.
 
-## Fluxo de Autorização OAuth2
+## Fluxo OAuth2 (Conexão)
+
+### Etapas
+
+```mermaid
+sequenceDiagram
+  participant User as Usuário
+  participant FE as Frontend (popup)
+  participant EF as Edge Function
+  participant ERP as ERP Provider
+  participant DB as Supabase DB
+
+  User->>FE: Clica "Conectar [ERP]"
+  FE->>EF: GET /erp-callback?action=authorize&app_id=X&provider=bling
+  EF->>DB: Busca app + provider + credentials
+  DB-->>EF: Dados
+  EF->>EF: adapter.getAuthUrl(clientId, redirectUri, appId)
+  EF-->>FE: JSON { authUrl }
+  Note over FE: Abre popup com authUrl
+  FE->>ERP: Redireciona para autorização
+  User->>ERP: Autoriza acesso
+  ERP->>EF: Redirect GET /erp-callback?code=xxx&state=APP_ID
+  EF->>EF: adapter.exchangeCodeForToken(code, redirectUri, credentials)
+  EF->>DB: saveTokens(appId, accessToken, refreshToken, expiresIn)
+  EF->>DB: createAuditLog('tokens.created', ..., { category: 'credentials' })
+  EF->>DB: UPDATE client_applications SET status = 'active'
+  Note over EF: Redireciona 302
+  EF->>FE: Location: /auth/oauth-callback?erp_callback=success&app_id=X
+  FE->>FE: postMessage({ erp_callback: 'success', app_id: 'X' }) → opener
+  FE->>FE: window.close()
+  Note over User: Popup fecha automaticamente
+```
+
+### Regras
+
+- **Callback URL:** `https://{project}.supabase.co/functions/v1/erp-callback` — força HTTPS + caminho completo com `/functions/v1/`
+- **Redirect do callback:** 302 para frontend (`APP_URL/auth/oauth-callback`) — resolve problema de Content-Type overriding pelo Supabase Gateway
+- **Popup auto-close:** Frontend recebe params na URL, executa `postMessage`, chama `window.close()`
+- **APP_URL:** Lido de `Deno.env.get('APP_URL')`, configurado via `supabase secrets set APP_URL=...`
+- **Auditoria:** Cada etapa (authorize_success, token_exchanged, tokens.created, etc) registra log com `category: 'credentials'`
+
+### Tratamento de Erros
+
+| Etapa | Erro | Ação |
+|---|---|---|
+| Callback | `state` ausente ou inválido | 302 → `?erp_callback=error&message=Missing+state` |
+| Callback | `code` ausente | 302 → `?erp_callback=error&message=Missing+code` |
+| Callback | App não encontrado | 302 → `?erp_callback=error&message=App+not+found` |
+| Token exchange | ERP retorna erro | 302 → `?erp_callback=error&message=Token+exchange+failed&details=X` + loga erro |
+| Token exchange | Parse de resposta inválida | 302 → `?erp_callback=error&message=Invalid+token+response` + loga erro |
+
+## Fluxo Webhook
+
+```mermaid
+sequenceDiagram
+  participant ERP as ERP Provider
+  participant EF as Edge Function
+  participant DB as Supabase DB
+
+  ERP->>EF: POST /erp-webhook (x-erp-provider, x-app-id)
+  EF->>EF: adapter.handleWebhook(payload, headers)
+  EF->>DB: upsertInvoice()
+  EF->>DB: upsertInvoiceItems()
+  EF->>DB: upsertProduct()
+  EF-->>ERP: { success, eventType, invoiceId, itemsCount }
+```
+
+### Regras
+
+- Webhooks não autenticados — cada provedor tem assinatura própria (verificar no adapter)
+- Timeout na edge function: 300s (max Supabase)
+- Em caso de erro: `enqueueRetry('erp_webhook_retry')` + log `queue.enqueued`
+
+## Fluxo Sincronização Manual
+
+```mermaid
+sequenceDiagram
+  participant User as Usuário
+  participant FE as Frontend
+  participant EF as Edge Function
+  participant ERP as ERP Provider
+  participant DB as Supabase DB
+
+  User->>FE: Clica "Sincronizar"
+  FE->>EF: POST /erp-sync-data { appId, fromDate, toDate }
+  EF->>DB: Busca token da app
+  EF->>ERP: adapter.fetchOrders(accessToken, params)
+  loop Paginação
+    ERP-->>EF: Página de pedidos
+    EF->>DB: upsertInvoice() + upsertInvoiceItems() + upsertProduct()
+  end
+  EF-->>FE: { syncedOrders, errors }
+  FE-->>User: Toast de sucesso com resumo
+```
+
+## Refresh Automático de Tokens
+
+| Ação | Quando | Gatilho |
+|---|---|---|
+| Verificar tokens expirando | A cada 60 min | `pg_cron` → `SELECT jobs.trigger_refresh_tokens()` |
+| Tentar refresh (max 50) | Se `expires_at <= now()` | Edge function `erp-refresh-token` |
+| Marcar como 'error' | Se refresh falhar | `enqueueRetry('erp_token_retry')` + log `queue.enqueued` |
+| Auditoria | Cada token processado | `createAuditLog()` com `category: 'credentials'` |
+
+## Provedores
 
 ### Bling
 
-```
-[Admin] → Insere Client ID + Secret no painel
-        → Clica "Conectar Bling"
-        → Frontend chama GET /erp-callback?action=authorize&app_id=X&provider=bling
-        → Adapter.getAuthUrl() → URL de autorização
-        → Redireciona para: https://www.bling.com.br/Api/v3/oauth/authorize
-        → Usuário autoriza no Bling
-        → Bling redireciona para: /erp-callback?code=XYZ&state=APP_ID
-        → Adapter.exchangeCodeForToken() → Basic Auth (clientId:secret base64)
-        → Retorna: { access_token, refresh_token, expires_in }
-        → saveTokens() em integration.tokens
-        → client_applications.status = 'active'
-```
-
-**Detalhes Bling:**
-- Authorization: Basic base64(client_id:client_secret)
-- Code expira em 1 minuto
-- Access token: sem expiração pública definida
-- Refresh token: 30 dias
-- Refresh usa mesmo endpoint `/oauth/token` com `grant_type=refresh_token`
-
-### Tiny (OpenID Connect / Keycloak)
-
-```
-[Admin] → Insere Client ID + Secret do Tiny
-        → Clica "Conectar Tiny"
-        → Frontend chama GET /erp-callback?action=authorize&app_id=X&provider=tiny
-        → Adapter.getAuthUrl() → URL de autorização
-        → Redireciona para: https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth
-        → Usuário autoriza no Tiny
-        → Tiny redireciona para: /erp-callback?code=XYZ&state=APP_ID
-        → Adapter.exchangeCodeForToken() → POST com client_id + client_secret no body
-        → Retorna: { access_token, refresh_token, expires_in }
-        → saveTokens() em integration.tokens
-        -> client_applications.status = 'active'
-```
-
-**Detalhes Tiny:**
-- Scope obrigatório: `openid`
-- Access token expira em 4 horas
-- Refresh token expira em 1 dia
-- Autenticação: client_id + client_secret no body da requisição (não Basic Auth)
-
-## Fluxo de Sincronização de Dados
-
-### Webhook (Tempo Real)
-
-```
-ERP → POST /erp-webhook
-     Headers: x-erp-provider, x-app-id
-     Body: payload do ERP
-
-1. adapter.handleWebhook(payload, headers)
-2. Normaliza para ERPOrder
-3. upsertInvoice(client_id, app_id, order)
-4. upsertInvoiceItems(invoiceId, order.items)
-5. upsertProduct(client_id, app_id, item)
-6. Retorna { success, eventType, invoiceId, itemsCount }
-```
-
-### Sincronização Manual (Pull)
-
-```
-Frontend → POST /erp-sync-data
-           Body: { appId, fromDate?, toDate? }
-
-1. Valida appId e status
-2. adapter.fetchOrders(accessToken, { fromDate, toDate })
-3. Para cada página:
-   3.1 Para cada pedido:
-       - upsertInvoice
-       - upsertInvoiceItems
-       - upsertProduct
-   3.2 Próxima página (hasMore)
-
-Em caso de erro:
-- Por pedido → enqueueRetry('erp_sync_retry')
-- Por página → enqueueRetry + break
-```
-
-### Refresh de Token (Cron)
-
-```
-pg_cron (a cada 30 min) → jobs.trigger_refresh_tokens()
-                        → pg_net.http_post() → erp-refresh-token
-
-1. Busca tokens expirados (LIMIT 50)
-2. Para cada token com refresh_token válido:
-   - adapter.refreshToken()
-   - saveTokens()
-   - client_applications.status = 'active'
-3. Se falhar:
-   - enqueueRetry('erp_token_retry')
-   - client_applications.status = 'error'
-```
-
-## Estrutura dos Adapters
-
-### `shared/adapters/`
-
-```
-adapters/
-├── base.ts          → Interface IERPAdapter + tipos (ERPOrder, ERPTokenResponse)
-├── bling.ts         → BlingAdapter (OAuth2, API v3)
-├── tiny.ts          → TinyAdapter (OpenID Connect, API v3)
-└── registry.ts      → Registro central (getAdapter('bling') → BlingAdapter)
-```
-
-### Para adicionar um novo ERP:
-
-1. Criar `novo-erp.ts` implementando `IERPAdapter`
-2. Registrar em `registry.ts`
-3. Adicionar seed em `integration.erp_providers`
-4. Testar o fluxo OAuth e fetchOrders
-
-## Mapeamento de Status
-
-### Bling → Sistema
-
-| Bling | Sistema |
+| Propriedade | Valor |
 |---|---|
-| 0 (Pendente) | pending |
-| 1 (Aprovado) | approved |
-| 2 (Cancelado) | canceled |
-| 3 (Devolvido) | refunded |
-| 9 (Em andamento) | pending |
+| Tipo | OAuth2 (Basic Auth) |
+| Auth URL | `https://www.bling.com.br/Api/v3/oauth/authorize` |
+| Token URL | `https://www.bling.com.br/Api/v3/oauth/token` |
+| Orders API | `GET /Api/v3/pedidos/vendas` |
+| Rate Limit | 3 req/s, 120k req/dia, token `/oauth/token` 20 req/min |
 
-### Tiny → Sistema
+### Tiny
 
-| Tiny | Sistema |
+| Propriedade | Valor |
 |---|---|
-| 0 (Aberta) | pending |
-| 3 (Aprovada) | approved |
-| 1 (Faturada) | approved |
-| 4 (Preparando Envio) | approved |
-| 5 (Enviada) | approved |
-| 6 (Entregue) | approved |
-| 7 (Pronto Envio) | approved |
-| 2 (Cancelada) | canceled |
-| 8 (Dados Incompletos) | pending |
-| 9 (Não Entregue) | pending |
+| Tipo | OpenID Connect (Keycloak) |
+| Auth URL | `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/auth` |
+| Token URL | `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token` |
+| Scope | `openid` |
+| Orders API | `GET /public-api/v3/pedidos` |
+| Rate Limit | 60-240 req/min (por plano) |
+| Token Expiry | Access: 4h, Refresh: 1 dia |
+
+### Anymarket
+
+| Propriedade | Valor |
+|---|---|
+| Tipo | API Key (x-api-key header) |

@@ -27,21 +27,28 @@ function getClientFromSchema(supabase: any, schema: string) {
 export async function getAppCredentials(supabase: any, appId: string) {
   const integration = getClientFromSchema(supabase, "integration");
 
-  const { data, error } = await integration
+  const { data: appRow, error: appErr } = await integration
     .from("client_applications")
-    .select(`
-      id, client_id, provider_id,
-      erp_providers!provider_id(name, auth_type, auth_config),
-      credentials(client_identifier, client_secret),
-      tokens(access_token, refresh_token, expires_at)
-    `)
+    .select("id, client_id, provider_id")
     .eq("id", appId)
     .single();
 
-  if (error || !data) {
+  if (appErr || !appRow) {
     throw new Error(`Aplicação não encontrada: ${appId}`);
   }
-  return data;
+
+  const [providerRes, credRes, tokenRes] = await Promise.all([
+    integration.from("erp_providers").select("name, auth_type, auth_config").eq("id", appRow.provider_id).single(),
+    integration.from("credentials").select("client_identifier, client_secret").eq("app_id", appId).maybeSingle(),
+    integration.from("tokens").select("access_token, refresh_token, expires_at").eq("app_id", appId).maybeSingle(),
+  ]);
+
+  return {
+    ...appRow,
+    erp_providers: providerRes.error ? null : providerRes.data,
+    credentials: credRes.data || null,
+    tokens: tokenRes.data || null,
+  };
 }
 
 export async function saveTokens(
@@ -53,6 +60,13 @@ export async function saveTokens(
   rawResponse: any
 ) {
   const integration = getClientFromSchema(supabase, "integration");
+
+  // Check if this is an update (existing token) or insert (new)
+  const { data: existing } = await integration
+    .from("tokens")
+    .select("id")
+    .eq("app_id", appId)
+    .maybeSingle();
 
   const expiresAt = expiresIn
     ? new Date(Date.now() + expiresIn * 1000).toISOString()
@@ -70,6 +84,20 @@ export async function saveTokens(
   );
 
   if (error) throw new Error(`Erro ao salvar tokens: ${error.message}`);
+
+  // Log credential lifecycle event
+  await createAuditLog(
+    supabase,
+    existing ? "tokens.updated" : "tokens.created",
+    appId,
+    null,
+    {
+      has_refresh: !!refreshToken,
+      expires_in: expiresIn,
+      expires_at: expiresAt,
+    },
+    { category: "credentials" }
+  );
 }
 
 export async function upsertInvoice(
@@ -171,6 +199,29 @@ export async function upsertProduct(
   }
 }
 
+export async function createAuditLog(
+  supabase: any,
+  event: string,
+  appId: string | null,
+  provider: string | null,
+  metadata: Record<string, unknown> = {},
+  options: { actorId?: string | null; category?: string; erpErrorCode?: string } = {}
+) {
+  const integration = getClientFromSchema(supabase, "integration");
+  const { error } = await integration.from("audit_logs").insert({
+    event_type: event,
+    app_id: appId,
+    provider,
+    actor_id: options.actorId || null,
+    category: options.category || "credentials",
+    erp_error_code: options.erpErrorCode || null,
+    payload: metadata,
+  });
+  if (error) {
+    console.error(`[audit] Falha ao salvar log: ${error.message}`);
+  }
+}
+
 export async function enqueueRetry(
   supabase: any,
   queue: string,
@@ -187,6 +238,16 @@ export async function enqueueRetry(
   if (rpcError) {
     console.error(`Falha ao enfileirar retry: ${rpcError.message}`);
   }
+
+  // Also log queue event to activity log
+  await createAuditLog(
+    supabase,
+    `queue.enqueued`,
+    appId,
+    null,
+    { queue, error, payload },
+    { category: "queues" }
+  );
 }
 
 function corsHeaders() {

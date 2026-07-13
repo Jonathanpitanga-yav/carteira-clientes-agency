@@ -24,7 +24,7 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { useState } from "react"
+import { useState, useCallback } from "react"
 
 type NavItem = {
   label: string
@@ -51,9 +51,15 @@ const navItems: (NavItem | NavGroup)[] = [
       { label: "Aplicativos Conectados", href: "/admin/connected-apps", roles: ["admin", "analyst"] },
     ],
   },
-  { label: "Auditoria", href: "/admin/audit-logs", icon: <History className="h-4 w-4" />, roles: ["admin"] },
+  {
+    label: "Auditoria e Filas", icon: <History className="h-4 w-4" />, roles: ["admin"],
+    children: [
+      { label: "Histórico de Atividades", href: "/admin/activity-history", roles: ["admin"] },
+      { label: "Logs de Auditoria", href: "/admin/audit-logs", roles: ["admin"] },
+      { label: "Filas de Retry", href: "/admin/queues", roles: ["admin"] },
+    ],
+  },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
-  { label: "Filas", href: "/admin/queues", icon: <Activity className="h-4 w-4" />, roles: ["admin"] },
   { label: "Dashboard", href: "/leader", icon: <BarChart3 className="h-4 w-4" />, roles: ["leader"] },
   { label: "Faturamento", href: "/leader/billing", icon: <FileText className="h-4 w-4" />, roles: ["leader"] },
   { label: "Analistas", href: "/leader/analysts", icon: <UserCog className="h-4 w-4" />, roles: ["leader"] },
@@ -67,7 +73,14 @@ const navItems: (NavItem | NavGroup)[] = [
 
 function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void }) {
   const pathname = usePathname()
-  const [integrationsOpen, setIntegrationsOpen] = useState(true)
+  const [groupsOpen, setGroupsOpen] = useState<Record<string, boolean>>({})
+  const toggleGroup = useCallback((label: string) => {
+    setGroupsOpen((prev) => ({ ...prev, [label]: !prev[label] }))
+  }, [])
+  const isGroupOpen = useCallback((label: string) => {
+    if (label in groupsOpen) return groupsOpen[label]
+    return true // default open
+  }, [groupsOpen])
   const filtered = navItems.filter((item) => role && item.roles.includes(role))
 
   return (
@@ -83,10 +96,11 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
             const isGroupActive = item.children.some(
               (c) => pathname === c.href || pathname.startsWith(c.href + "/"),
             )
+            const open = isGroupOpen(item.label)
             return (
               <div key={item.label}>
                 <button
-                  onClick={() => setIntegrationsOpen(!integrationsOpen)}
+                  onClick={() => toggleGroup(item.label)}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     isGroupActive
@@ -99,11 +113,11 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 transition-transform",
-                      integrationsOpen ? "" : "-rotate-90",
+                      open ? "" : "-rotate-90",
                     )}
                   />
                 </button>
-                {integrationsOpen && (
+                {open && (
                   <div className="ml-3 mt-1 space-y-1 border-l border-border pl-2">
                     {item.children
                       .filter((c) => role && c.roles.includes(role))

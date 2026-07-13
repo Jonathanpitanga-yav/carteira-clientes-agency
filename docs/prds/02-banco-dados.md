@@ -5,7 +5,7 @@
 | Schema | Domínio |
 |---|---|
 | `core` | Perfis, clientes, vínculos, auditoria, tokens M2M |
-| `integration` | Provedores ERP, aplicações conectadas, credenciais, tokens OAuth |
+| `integration` | Provedores ERP, aplicações conectadas, credenciais, tokens OAuth, logs de atividade |
 | `sales` | Faturamento, produtos, itens, views consolidadas |
 | `products` | Catálogo de produtos (reservado para futura expansão) |
 | `jobs` | Cron jobs, filas de retry, helpers |
@@ -56,7 +56,7 @@ Vínculo entre usuários finais (clientes) e suas empresas.
 Unique: `(client_id, user_id)`
 
 ### `core.audit_logs`
-Log centralizado de todas as ações do sistema.
+Log centralizado de todas as ações do sistema (ações manuais e operações administrativas).
 
 | Coluna | Tipo | Descrição |
 |---|---|---|
@@ -146,6 +146,24 @@ Tokens de acesso e refresh.
 | `raw_payload_response` | JSONB | Payload completo do ERP |
 
 Unique: `app_id`
+
+### `integration.audit_logs`
+Log de atividades do sistema de integração (rastreabilidade de OAuth, filas, etc).
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID PK | ID do log |
+| `created_at` | TIMESTAMPTZ | Data do evento |
+| `event_type` | TEXT | Tipo do evento (ex: 'erp_callback.authorize_success', 'tokens.created') |
+| `app_id` | UUID FK → client_applications | Aplicação afetada |
+| `provider` | TEXT | Nome do provedor (bling, tiny) |
+| `actor_id` | UUID FK → core.profiles | Quem executou a ação |
+| `category` | TEXT | Categoria: 'credentials' \| 'access' \| 'queues' |
+| `erp_error_code` | TEXT | Código de erro retornado pelo ERP (se houver) |
+| `payload` | JSONB | Dados adicionais do evento |
+
+RLS: Apenas admin visualiza.
+Índices: `(category)`, `(actor_id)`, `(event_type)`.
 
 ## Tabelas — Schema `sales`
 
@@ -259,6 +277,7 @@ Faturamento diário (últimos 30 dias).
 | `core.api_tokens` | CRUD | — | — | — | — |
 | `integration.erp_providers` | CRUD | SELECT | SELECT | SELECT | — |
 | `integration.client_applications` | CRUD | CRUD | — | — | — |
+| `integration.audit_logs` | SELECT | — | — | — | INSERT |
 | `integration.credentials` | CRUD | — | — | — | CRUD |
 | `integration.tokens` | CRUD | — | — | — | CRUD |
 | `sales.invoices` | via cliente | via cliente | via carteira | via vínculo | CRUD |

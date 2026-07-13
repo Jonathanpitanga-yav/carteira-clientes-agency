@@ -27,10 +27,15 @@ function statusBadge(status: string) {
 function tokenLabel(expiresAt: string | null) {
   if (!expiresAt) return { label: "Sem token", className: "text-red-500 font-medium" }
   const diff = new Date(expiresAt).getTime() - Date.now()
-  const days = Math.floor(diff / 86400000)
 
   if (diff < 0) return { label: "Expirado", className: "text-orange-500 font-medium" }
-  return { label: `${days}d`, className: "text-emerald-600 font-medium" }
+
+  const totalHours = Math.floor(diff / 3600000)
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+
+  const label = days > 0 ? `${days}d ${hours}h` : `${hours}h`
+  return { label, className: "text-emerald-600 font-medium" }
 }
 
 export function ConnectedAppsTable() {

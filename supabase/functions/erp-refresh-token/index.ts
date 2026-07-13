@@ -1,5 +1,5 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
-import { getIntegrationClient, enqueueRetry, saveTokens, handleCors, jsonResponse } from "../shared/db.ts";
+import { getIntegrationClient, enqueueRetry, saveTokens, createAuditLog, handleCors, jsonResponse } from "../shared/db.ts";
 
 function log(step: string, data: Record<string, unknown> = {}) {
   console.log(`[erp-refresh-token] ${step}`, JSON.stringify(data));
@@ -11,20 +11,12 @@ Deno.serve(async (req) => {
 
   try {
     const supabase = getIntegrationClient(req);
+    const audit = (event: string, appId: string | null, meta: Record<string, unknown> = {}) =>
+      createAuditLog(supabase, `erp_refresh.${event}`, appId, null, meta, { category: "credentials" });
 
     const { data: expiringTokens, error: queryError } = await supabase
       .from("tokens")
-      .select(`
-        app_id,
-        access_token,
-        refresh_token,
-        client_applications!inner(
-          client_id,
-          provider_id,
-          erp_providers!provider_id(name),
-          credentials(client_identifier, client_secret)
-        )
-      `)
+      .select("app_id, access_token, refresh_token")
       .or("expires_at.lte.now,expires_at.is.null")
       .limit(50);
 
@@ -39,38 +31,56 @@ Deno.serve(async (req) => {
     }
 
     log("tokens_found", { count: expiringTokens.length });
+    await audit("refresh_batch_start", null, { count: expiringTokens.length });
 
     let renewed = 0;
     let failed = 0;
 
     for (const row of expiringTokens) {
       try {
-        const app = row.client_applications as any;
-        const providerName = app.erp_providers?.name;
+        const appId = row.app_id;
+        const appRes = await supabase.from("client_applications").select("client_id, provider_id").eq("id", appId).single();
+        if (appRes.error || !appRes.data) {
+          log("app_not_found", { appId, error: appRes.error?.message });
+          await audit("refresh_app_not_found", appId, { error: appRes.error?.message });
+          failed++;
+          continue;
+        }
+        const credRes = await supabase.from("credentials").select("client_identifier, client_secret").eq("app_id", appId).maybeSingle();
+        const provRes = await supabase.from("erp_providers").select("name").eq("id", appRes.data.provider_id).single();
+        const providerName = provRes.data?.name;
 
-        log("processing_token", { appId: row.app_id, provider: providerName });
+        log("processing_token", { appId, provider: providerName });
+        await audit("refresh_processing", appId, { provider: providerName });
 
         const adapter = getAdapter(providerName || "");
 
         if (!row.refresh_token) {
-          log("no_refresh_token", { appId: row.app_id });
-          await enqueueRetry(supabase, "erp_token_retry", row.app_id, "Sem refresh_token disponível");
-          await supabase.from("client_applications").update({ status: "error" }).eq("id", row.app_id);
+          log("no_refresh_token", { appId });
+          await audit("refresh_no_refresh_token", appId, { provider: providerName });
+          await enqueueRetry(supabase, "erp_token_retry", appId, "Sem refresh_token disponível");
+          await supabase.from("client_applications").update({ status: "error" }).eq("id", appId);
           failed++;
           continue;
         }
 
         const credentials = {
-          clientId: app.credentials?.client_identifier,
-          clientSecret: app.credentials?.client_secret,
+          clientId: credRes.data?.client_identifier,
+          clientSecret: credRes.data?.client_secret,
         };
 
-        log("refreshing_token", { appId: row.app_id, provider: providerName });
+        log("refreshing_token", { appId, provider: providerName });
 
         const tokenResponse = await adapter.refreshToken(row.refresh_token, credentials);
 
         log("token_refreshed", {
-          appId: row.app_id,
+          appId,
+          hasAccessToken: !!tokenResponse.accessToken,
+          hasRefreshToken: !!tokenResponse.refreshToken,
+          expiresIn: tokenResponse.expiresIn,
+        });
+        await audit("refresh_success", appId, {
+          provider: providerName,
           hasAccessToken: !!tokenResponse.accessToken,
           hasRefreshToken: !!tokenResponse.refreshToken,
           expiresIn: tokenResponse.expiresIn,
@@ -78,26 +88,26 @@ Deno.serve(async (req) => {
 
         await saveTokens(
           supabase,
-          row.app_id,
+          appId,
           tokenResponse.accessToken,
           tokenResponse.refreshToken,
           tokenResponse.expiresIn,
           tokenResponse.rawResponse,
         );
 
-        await supabase.from("client_applications").update({ status: "active" }).eq("id", row.app_id);
+        await supabase.from("client_applications").update({ status: "active" }).eq("id", appId);
         renewed++;
       } catch (err: any) {
         failed++;
         log("refresh_failed", { appId: row.app_id, error: err.message, stack: err.stack });
-        await enqueueRetry(supabase, "erp_token_retry", row.app_id, err.message, {
-          provider: (row.client_applications as any)?.erp_providers?.name,
-        });
+        await audit("refresh_failed", row.app_id, { error: err.message });
+        await enqueueRetry(supabase, "erp_token_retry", row.app_id, err.message);
         await supabase.from("client_applications").update({ status: "error" }).eq("id", row.app_id);
       }
     }
 
     log("refresh_complete", { renewed, failed });
+    await audit("refresh_batch_complete", null, { renewed, failed, total: expiringTokens.length });
 
     return jsonResponse({
       message: `Tokens renovados: ${renewed}, falhas: ${failed}`,

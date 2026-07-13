@@ -4,7 +4,7 @@
 
 Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 - `shared/adapters/` — Adapter pattern para ERPs
-- `shared/db.ts` — Helpers de banco (getClient, upsertInvoice, enqueueRetry, CORS)
+- `shared/db.ts` — Helpers de banco (getClient, upsertInvoice, enqueueRetry, createAuditLog, CORS)
 - `shared/utils/` — Utilitários (rate-limiter, crypto)
 
 ## Functions
@@ -17,19 +17,28 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 
 | Método | Path | Descrição |
 |---|---|---|
-| GET | `/erp-callback` | Callback OAuth (recebe code + state) |
-| GET | `/erp-callback?action=authorize&app_id=x&provider=bling` | Retorna URL de autorização |
+| GET | `/erp-callback?action=authorize&app_id=x&provider=bling` | Retorna URL de autorização (JSON) |
+| GET | `/erp-callback?code=X&state=Y` | Callback OAuth → 302 redirect para frontend |
 
-**Fluxo OAuth:**
-1. Frontend solicita URL de autorização → `GET ?action=authorize`
-2. Redireciona usuário para o ERP (Bling ou Tiny)
-3. Usuário autoriza → ERP redireciona para `/erp-callback?code=X&state=Y`
-4. Lê `integration.credentials` pelo `app_id` (state)
-5. `adapter.exchangeCodeForToken(code, redirectUri, credentials)`
-6. Salva tokens em `integration.tokens` com `saveTokens()`
-7. Atualiza `client_applications.status = 'active'`
+**Fluxo OAuth (autorização):**
+1. Frontend chama `GET ?action=authorize&app_id=X&provider=bling`
+2. Edge function valida app + credenciais no banco
+3. Retorna JSON `{ authUrl }` com URL de autorização do ERP
+4. Frontend abre popup com essa URL
 
-**Headers esperados:** Nenhum específico.
+**Fluxo OAuth (callback):**
+1. ERP redireciona para `/erp-callback?code=X&state=APP_ID`
+2. Edge function:
+   - Busca app + provider + credentials pelo `state` (app_id)
+   - `adapter.exchangeCodeForToken(code, redirectUri, credentials)`
+   - `saveTokens()` → upsert em `integration.tokens`
+   - Atualiza `client_applications.status = 'active'`
+   - Redireciona (302) para `{APP_URL}/auth/oauth-callback?erp_callback=success&app_id=...`
+3. Em caso de erro: redirect para `{APP_URL}/auth/oauth-callback?erp_callback=error&message=...`
+
+**Callback URL:** `https://{project}.supabase.co/functions/v1/erp-callback` (força HTTPS + caminho completo)
+
+**Auditoria:** Cada etapa do fluxo registra log em `integration.audit_logs` com `category: "credentials"`.
 
 ---
 
@@ -42,12 +51,14 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 **Fluxo:**
 1. Busca tokens com `expires_at <= now()` ou `expires_at IS NULL` (limite 50)
 2. Para cada token:
+   - Busca `client_applications` + `credentials` + `erp_providers` separadamente (sem FK joins)
    - Obtém o adapter pelo `provider.name`
    - `adapter.refreshToken(refreshToken, credentials)`
-   - Salva novo token
+   - `saveTokens()` — salva novo token + loga `tokens.updated`
    - Em caso de erro → `enqueueRetry('erp_token_retry')` + marca app como 'error'
+3. Ao final: registra `refresh_batch_complete` em audit_logs
 
-**Rate Limit:** Tokens endpoint respeita limite de 15 req/min (Bling).
+**Auditoria:** Cada token processado registra log em `integration.audit_logs` com `category: "credentials"`.
 
 ---
 
@@ -90,7 +101,7 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 2. `adapter.fetchOrders(accessToken, { fromDate, toDate })`
 3. Itera páginas (100 por página)
 4. Para cada pedido: `upsertInvoice()`, `upsertInvoiceItems()`, `upsertProduct()`
-5. Em caso de erro por pedido: `enqueueRetry('erp_sync_retry')`
+5. Em caso de erro por pedido: `enqueueRetry('erp_sync_retry')` + loga `queue.enqueued`
 6. Retorna `{ syncedOrders, errors }`
 
 ---
@@ -102,12 +113,16 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 | Função | Descrição |
 |---|---|
 | `getClient(req)` | Cria cliente Supabase com service_role |
-| `getAppCredentials(appId)` | Busca app + provider + credentials + tokens |
-| `saveTokens(appId, access, refresh, expires, raw)` | Upsert tokens na tabela |
+| `getIntegrationClient(req)` | Cria cliente no schema `integration` |
+| `getCoreClient(req)` | Cria cliente no schema `core` |
+| `getSalesClient(req)` | Cria cliente no schema `sales` |
+| `getAppCredentials(appId)` | Busca app + provider + credentials + tokens (queries separadas, sem FK joins) |
+| `saveTokens(appId, access, refresh, expires, raw)` | Upsert tokens + loga `tokens.created` ou `tokens.updated` |
+| `createAuditLog(event, appId, provider, metadata, options)` | Insere log em `integration.audit_logs` com suporte a `actorId`, `category`, `erpErrorCode` |
 | `upsertInvoice(clientId, appId, order)` | Insert ou update de fatura |
 | `upsertInvoiceItems(invoiceId, items)` | Insert de itens da fatura |
 | `upsertProduct(clientId, appId, item)` | Insert de produto (se não existir) |
-| `enqueueRetry(supabase, queue, appId, error, payload)` | Enfileira mensagem de retry no pgmq |
+| `enqueueRetry(queue, appId, error, payload)` | Enfileira mensagem de retry no pgmq + loga `queue.enqueued` em audit_logs |
 | `handleCors(req)` | Intercepta OPTIONS, retorna CORS headers |
 | `jsonResponse(data, status)` | Response JSON padronizado |
 
