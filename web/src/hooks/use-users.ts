@@ -1,0 +1,90 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { createClient } from "@/lib/supabase/client"
+import { QUERY_KEYS } from "@/lib/constants"
+import { humanError } from "@/lib/utils/errors"
+import { toast } from "sonner"
+
+const supabase = createClient()
+
+export type UserProfile = {
+  id: string
+  full_name: string | null
+  role: string | null
+  created_at: string
+  email?: string
+}
+
+export function useUsers() {
+  return useQuery({
+    queryKey: [QUERY_KEYS.USERS],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      return data as UserProfile[]
+    },
+  })
+}
+
+export function useUser(id: string) {
+  return useQuery({
+    queryKey: [QUERY_KEYS.USER, id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", id)
+        .single()
+
+      if (error) throw error
+      return data as UserProfile
+    },
+    enabled: !!id,
+  })
+}
+
+export type UserInput = {
+  full_name: string
+  role: string
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...input }: UserInput & { id: string }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update(input)
+        .eq("id", id)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.USERS] })
+      toast.success("Usuário atualizado com sucesso!")
+    },
+    onError: (err) => toast.error(humanError(err)),
+  })
+}
+
+export function useUsersStats() {
+  return useQuery({
+    queryKey: [QUERY_KEYS.USERS, "stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("role")
+      if (error) throw error
+      const rows = data as { role: string | null }[]
+      return {
+        total: rows.length,
+        admins: rows.filter((r) => r.role === "admin").length,
+        leaders: rows.filter((r) => r.role === "leader").length,
+        analysts: rows.filter((r) => r.role === "analyst").length,
+        clients: rows.filter((r) => r.role === "client").length,
+      }
+    },
+  })
+}

@@ -1,0 +1,16 @@
+# Temp
+schemas_dump.sql
+supabase/.temp/
+
+# Node
+node_modules/
+.next/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
