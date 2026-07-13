@@ -21,3 +21,12 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Playwright
+.playwright-mcp/
+
+# SQL scripts
+*.sql
+
+# Temp scripts
+seed-admin.*
