@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-export async function createClient() {
+async function getClient() {
   const cookieStore = await cookies()
 
   return createServerClient(
@@ -20,4 +20,25 @@ export async function createClient() {
       },
     },
   )
+}
+
+export async function createClient() {
+  return getClient()
+}
+
+export async function createSchemaClient(schema: string) {
+  const client = await getClient()
+  return client.schema(schema)
+}
+
+export async function createCoreClient() {
+  return createSchemaClient("core")
+}
+
+export async function createIntegrationClient() {
+  return createSchemaClient("integration")
+}
+
+export async function createSalesClient() {
+  return createSchemaClient("sales")
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
+import { createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { formatCurrency } from "@/lib/utils/format"
 
 export default function ClientOrdersPage() {
-  const supabase = createClient()
+  const supabase = createSchemaClient("sales")
   const { data: orders, isLoading } = useQuery({
     queryKey: [QUERY_KEYS.CLIENT, "orders"],
     queryFn: async () => {

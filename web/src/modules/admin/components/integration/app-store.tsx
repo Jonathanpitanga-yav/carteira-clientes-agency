@@ -37,12 +37,6 @@ const ERPS = [
   },
 ]
 
-type ConnectedERP = {
-  erp_provider_id: string
-  client_name?: string
-  status: string
-}
-
 export function AppStore() {
   const { data: integrations, isLoading } = useIntegrations()
   const [selectedERP, setSelectedERP] = useState<(typeof ERPS)[number] | null>(null)
@@ -52,8 +46,8 @@ export function AppStore() {
     clientSecret: string
   } | null>(null)
 
-  const connected: ConnectedERP[] = (integrations ?? []).map((i) => ({
-    erp_provider_id: i.erp_provider_id,
+  const connected = (integrations ?? []).map((i) => ({
+    slug: i.provider_slug || "",
     client_name: i.client_name,
     status: i.status,
   }))
@@ -69,10 +63,10 @@ export function AppStore() {
   }
 
   const isConnected = (erpId: string) =>
-    connected.some((c) => c.erp_provider_id === erpId && c.status === "active")
+    connected.some((c) => c.slug === erpId && c.status === "active")
 
   const getClientName = (erpId: string) =>
-    connected.find((c) => c.erp_provider_id === erpId)?.client_name
+    connected.find((c) => c.slug === erpId)?.client_name
 
   return (
     <>

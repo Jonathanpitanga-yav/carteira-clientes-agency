@@ -1,12 +1,12 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
-import { getClient, enqueueRetry, saveTokens, handleCors, jsonResponse } from "../shared/db.ts";
+import { getIntegrationClient, enqueueRetry, saveTokens, handleCors, jsonResponse } from "../shared/db.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
   try {
-    const supabase = getClient(req);
+    const supabase = getIntegrationClient(req);
 
     const { data: expiringTokens, error: queryError } = await supabase
       .from("tokens")
@@ -17,8 +17,8 @@ Deno.serve(async (req) => {
         client_applications!inner(
           client_id,
           provider_id,
-          integration:erp_providers(name),
-          integration.credentials(client_identifier, client_secret)
+          erp_providers!provider_id(name),
+          credentials(client_identifier, client_secret)
         )
       `)
       .or("expires_at.lte.now,expires_at.is.null")
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     for (const row of expiringTokens) {
       try {
         const app = row.client_applications;
-        const adapter = getAdapter(app.integration?.name || "");
+        const adapter = getAdapter(app.erp_providers?.name || "");
 
         if (!row.refresh_token) {
           await enqueueRetry(supabase, "erp_token_retry", row.app_id, "Sem refresh_token disponível");
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         failed++;
         console.error(`Falha ao renovar token ${row.app_id}: ${err.message}`);
         await enqueueRetry(supabase, "erp_token_retry", row.app_id, err.message, {
-          provider: row.client_applications?.integration?.name,
+          provider: row.client_applications?.erp_providers?.name,
         });
         await supabase.from("client_applications").update({ status: "error" }).eq("id", row.app_id);
       }

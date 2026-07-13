@@ -1,50 +1,69 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
-function getSupabase() {
-  return createClient()
+function getIntegration() {
+  return createSchemaClient("integration")
+}
+
+function getCore() {
+  return createSchemaClient("core")
 }
 
 export type Integration = {
   id: string
   client_id: string
-  erp_provider_id: string
+  provider_id: string
+  app_name: string
   status: string
-  credentials: { client_id: string; client_secret: string } | null
   created_at: string
   updated_at: string
   client_name?: string
   provider_name?: string
+  provider_slug?: string
 }
 
 export function useIntegrations() {
   return useQuery({
     queryKey: [QUERY_KEYS.INTEGRATIONS],
     queryFn: async () => {
-      const { data, error } = await getSupabase()
+      const { data: apps, error } = await getIntegration()
         .from("client_applications")
-        .select(`
-          *,
-          clients!inner(name),
-          erp_providers!inner(name)
-        `)
+        .select("*")
         .order("created_at", { ascending: false })
 
       if (error) throw error
 
-      return (data as any[]).map((row) => ({
+      const clientIds = [...new Set(apps.map((a: any) => a.client_id))]
+      const providerIds = [...new Set(apps.map((a: any) => a.provider_id))]
+
+      const { data: clients } = await getCore()
+        .from("clients")
+        .select("id, name")
+        .in("id", clientIds)
+
+      const { data: providers } = await getIntegration()
+        .from("erp_providers")
+        .select("id, name, display_name")
+        .in("id", providerIds)
+
+      const clientMap = new Map((clients || []).map((c: any) => [c.id, c.name]))
+      const providerMap = new Map((providers || []).map((p: any) => [p.id, p.display_name]))
+      const providerSlugMap = new Map((providers || []).map((p: any) => [p.id, p.name]))
+
+      return (apps as any[]).map((row) => ({
         id: row.id,
         client_id: row.client_id,
-        erp_provider_id: row.erp_provider_id,
+        provider_id: row.provider_id,
+        app_name: row.app_name,
         status: row.status,
-        credentials: row.credentials,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        client_name: row.clients?.name,
-        provider_name: row.erp_providers?.name,
+        client_name: clientMap.get(row.client_id),
+        provider_name: providerMap.get(row.provider_id),
+        provider_slug: providerSlugMap.get(row.provider_id),
       })) as Integration[]
     },
   })
@@ -61,17 +80,15 @@ export function useCreateIntegrationClient() {
 
   return useMutation({
     mutationFn: async ({ erpId, clientName, credentials }: CreateIntegrationInput) => {
-      const supabase = getSupabase()
-
-      const { data: erp } = await supabase
+      const { data: erp } = await getIntegration()
         .from("erp_providers")
-        .select("id")
-        .eq("slug", erpId)
+        .select("id, auth_type, auth_config")
+        .eq("name", erpId)
         .maybeSingle()
 
       if (!erp) throw new Error("ERP provider not found")
 
-      const { data: client } = await supabase
+      const { data: client } = await getCore()
         .from("clients")
         .insert({ name: clientName, status: "active", document: null })
         .select("id")
@@ -79,14 +96,30 @@ export function useCreateIntegrationClient() {
 
       if (!client) throw new Error("Failed to create client")
 
-      const { error } = await supabase.from("client_applications").insert({
-        client_id: client.id,
-        erp_provider_id: erp.id,
-        status: "active",
-        credentials,
-      })
+      const { data: app } = await getIntegration()
+        .from("client_applications")
+        .insert({
+          client_id: client.id,
+          provider_id: erp.id,
+          app_name: clientName,
+          status: "active",
+        })
+        .select("id")
+        .single()
 
-      if (error) throw error
+      if (!app) throw new Error("Failed to create integration")
+
+      if (erp.auth_type === "api_key") {
+        const { error: credErr } = await getIntegration()
+          .from("credentials")
+          .insert({
+            app_id: app.id,
+            client_identifier: credentials.client_id,
+            client_secret: credentials.client_secret,
+          })
+
+        if (credErr) throw credErr
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [QUERY_KEYS.INTEGRATIONS] })
@@ -102,9 +135,9 @@ export function useDeleteIntegration() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await getSupabase()
+      const { error } = await getIntegration()
         .from("client_applications")
-        .update({ status: "inactive" })
+        .update({ status: "expired" })
         .eq("id", id)
 
       if (error) throw error
@@ -120,7 +153,7 @@ export function useDeleteIntegration() {
 export function useSyncIntegration() {
   return useMutation({
     mutationFn: async (appId: string) => {
-      const { error } = await getSupabase().functions.invoke("erp-sync-data", {
+      const { error } = await createClient().functions.invoke("erp-sync-data", {
         body: { appId },
       })
 

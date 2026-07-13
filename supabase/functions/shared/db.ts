@@ -8,14 +8,32 @@ export function getClient(req: Request) {
   });
 }
 
+export function getIntegrationClient(req: Request) {
+  return getClient(req).schema("integration");
+}
+
+export function getSalesClient(req: Request) {
+  return getClient(req).schema("sales");
+}
+
+export function getCoreClient(req: Request) {
+  return getClient(req).schema("core");
+}
+
+function getClientFromSchema(supabase: any, schema: string) {
+  return supabase.schema ? supabase.schema(schema) : supabase;
+}
+
 export async function getAppCredentials(supabase: any, appId: string) {
-  const { data, error } = await supabase
+  const integration = getClientFromSchema(supabase, "integration");
+
+  const { data, error } = await integration
     .from("client_applications")
     .select(`
       id, client_id, provider_id,
-      integration:erp_providers(name, auth_type, auth_config),
-      integration.credentials(client_identifier, client_secret),
-      integration.tokens(access_token, refresh_token, expires_at)
+      erp_providers!provider_id(name, auth_type, auth_config),
+      credentials(client_identifier, client_secret),
+      tokens(access_token, refresh_token, expires_at)
     `)
     .eq("id", appId)
     .single();
@@ -34,11 +52,13 @@ export async function saveTokens(
   expiresIn: number | undefined,
   rawResponse: any
 ) {
+  const integration = getClientFromSchema(supabase, "integration");
+
   const expiresAt = expiresIn
     ? new Date(Date.now() + expiresIn * 1000).toISOString()
     : null;
 
-  const { error } = await supabase.from("tokens").upsert(
+  const { error } = await integration.from("tokens").upsert(
     {
       app_id: appId,
       access_token: accessToken,
@@ -58,7 +78,9 @@ export async function upsertInvoice(
   appId: string,
   order: any
 ) {
-  const { data: existing } = await supabase
+  const sales = getClientFromSchema(supabase, "sales");
+
+  const { data: existing } = await sales
     .from("invoices")
     .select("id")
     .eq("app_id", appId)
@@ -78,14 +100,14 @@ export async function upsertInvoice(
   };
 
   if (existing) {
-    const { error } = await supabase
+    const { error } = await sales
       .from("invoices")
       .update(payload)
       .eq("id", existing.id);
     if (error) throw new Error(`Erro ao atualizar fatura: ${error.message}`);
     return existing.id;
   } else {
-    const { data, error } = await supabase
+    const { data, error } = await sales
       .from("invoices")
       .insert(payload)
       .select("id")
@@ -100,6 +122,8 @@ export async function upsertInvoiceItems(
   invoiceId: string,
   items: any[]
 ) {
+  const sales = getClientFromSchema(supabase, "sales");
+
   const rows = items.map((item: any) => ({
     invoice_id: invoiceId,
     external_product_id: item.externalProductId,
@@ -109,7 +133,7 @@ export async function upsertInvoiceItems(
     total_amount: item.totalAmount,
   }));
 
-  const { error } = await supabase.from("invoice_items").upsert(rows, {
+  const { error } = await sales.from("invoice_items").upsert(rows, {
     onConflict: undefined,
     ignoreDuplicates: false,
   });
@@ -123,7 +147,9 @@ export async function upsertProduct(
   appId: string,
   item: any
 ) {
-  const { data: existing } = await supabase
+  const sales = getClientFromSchema(supabase, "sales");
+
+  const { data: existing } = await sales
     .from("products")
     .select("id")
     .eq("app_id", appId)
@@ -141,7 +167,7 @@ export async function upsertProduct(
   };
 
   if (!existing) {
-    await supabase.from("products").insert(payload).maybeSingle();
+    await sales.from("products").insert(payload).maybeSingle();
   }
 }
 

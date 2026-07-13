@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
+import { createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
 function getSupabase() {
-  return createClient()
+  return createSchemaClient("core")
 }
 
 export type UserProfile = {

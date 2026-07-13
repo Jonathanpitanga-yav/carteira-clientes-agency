@@ -1,6 +1,6 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
-  getClient, upsertInvoice, upsertInvoiceItems, upsertProduct,
+  getIntegrationClient, upsertInvoice, upsertInvoiceItems, upsertProduct,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
 
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Evento ignorado (tipo desconhecido)." });
     }
 
-    const supabase = getClient(req);
+    const supabase = getIntegrationClient(req);
 
     const { data: app, error: appError } = await supabase
       .from("client_applications")

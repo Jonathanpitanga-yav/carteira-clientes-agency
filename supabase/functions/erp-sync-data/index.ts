@@ -1,6 +1,6 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
-  getClient, enqueueRetry,
+  getIntegrationClient, enqueueRetry,
   upsertInvoice, upsertInvoiceItems, upsertProduct,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
@@ -16,15 +16,15 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "appId é obrigatório." }, 400);
     }
 
-    const supabase = getClient(req);
+    const supabase = getIntegrationClient(req);
 
     const { data: app, error: appError } = await supabase
       .from("client_applications")
       .select(`
         id, client_id, status,
-        integration:erp_providers(name),
-        integration.tokens(access_token, refresh_token),
-        integration.credentials(client_identifier, client_secret)
+        erp_providers!provider_id(name),
+        tokens(access_token, refresh_token),
+        credentials(client_identifier, client_secret)
       `)
       .eq("id", appId)
       .single();
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Aplicação não está ativa." }, 400);
     }
 
-    const adapter = getAdapter(app.integration?.name || "");
+    const adapter = getAdapter(app.erp_providers?.name || "");
     const accessToken = app.tokens?.access_token;
     if (!accessToken) {
       return jsonResponse({ error: "Nenhum token de acesso encontrado." }, 400);

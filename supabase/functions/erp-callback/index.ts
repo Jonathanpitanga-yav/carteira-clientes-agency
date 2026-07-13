@@ -1,11 +1,12 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
-import { getClient, getAppCredentials, saveTokens, handleCors, jsonResponse } from "../shared/db.ts";
+import { getIntegrationClient, getAppCredentials, saveTokens, handleCors, jsonResponse } from "../shared/db.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
   const url = new URL(req.url);
+  const supabase = getIntegrationClient(req);
 
   // GET /erp-callback?action=authorize&app_id=xxx&provider=bling
   if (req.method === "GET" && url.searchParams.get("action") === "authorize") {
@@ -18,14 +19,13 @@ Deno.serve(async (req) => {
       }
 
       const adapter = getAdapter(provider);
-      const supabase = getClient(req);
 
       const { data: app } = await supabase
         .from("client_applications")
         .select(`
           id, client_id,
-          integration:erp_providers(name),
-          integration.credentials(client_identifier)
+          erp_providers!provider_id(name),
+          credentials(client_identifier)
         `)
         .eq("id", appId)
         .single();
@@ -57,9 +57,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Parâmetros code e state são obrigatórios." }, 400);
     }
 
-    const supabase = getClient(req);
     const app = await getAppCredentials(supabase, state);
-    const providerName = app.integration?.name;
+    const providerName = app.erp_providers?.name;
 
     if (!providerName) {
       return jsonResponse({ error: "Provedor ERP não encontrado." }, 400);

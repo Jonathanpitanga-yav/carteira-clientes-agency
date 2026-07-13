@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
+import { createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 
 function getSupabase() {
-  return createClient()
+  return createSchemaClient("sales")
 }
 
 export type ProductRanking = {
