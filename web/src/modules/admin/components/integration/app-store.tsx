@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ExternalLink, CheckCircle2, Clock, Loader2 } from "lucide-react"
+import { ExternalLink, CheckCircle2, Clock, Users } from "lucide-react"
 
 const ERPS = [
   {
@@ -46,11 +46,15 @@ export function AppStore() {
     clientSecret: string
   } | null>(null)
 
-  const connected = (integrations ?? []).map((i) => ({
-    slug: i.provider_slug || "",
-    client_name: i.client_name,
-    status: i.status,
-  }))
+  const connectionsByERP = (integrations ?? []).reduce(
+    (acc, i) => {
+      const slug = i.provider_slug || ""
+      if (!acc[slug]) acc[slug] = []
+      acc[slug].push(i)
+      return acc
+    },
+    {} as Record<string, typeof integrations>,
+  )
 
   if (isLoading) {
     return (
@@ -62,18 +66,12 @@ export function AppStore() {
     )
   }
 
-  const isConnected = (erpId: string) =>
-    connected.some((c) => c.slug === erpId && c.status === "active")
-
-  const getClientName = (erpId: string) =>
-    connected.find((c) => c.slug === erpId)?.client_name
-
   return (
     <>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {ERPS.map((erp) => {
-          const connected_ = isConnected(erp.id)
-          const clientName = getClientName(erp.id)
+          const conns = connectionsByERP[erp.id] || []
+          const activeConns = conns.filter((c) => c.status === "active")
 
           return (
             <Card
@@ -99,10 +97,10 @@ export function AppStore() {
                       </p>
                     </div>
                   </div>
-                  {connected_ && (
-                    <Badge className="bg-emerald-600 text-white">
+                  {activeConns.length > 0 && (
+                    <Badge className="bg-emerald-600 text-white whitespace-nowrap">
                       <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Conectado
+                      {activeConns.length} conectado{activeConns.length > 1 ? "s" : ""}
                     </Badge>
                   )}
                   {!erp.available && (
@@ -115,23 +113,46 @@ export function AppStore() {
               </CardHeader>
 
               <CardContent className="flex-1">
-                {connected_ && clientName && (
+                {conns.length > 0 ? (
+                  <ul className="space-y-1">
+                    {conns.map((c) => (
+                      <li key={c.id} className="flex items-center gap-2 text-sm">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>{c.client_name ?? "—"}</span>
+                        <Badge
+                          variant="outline"
+                          className={`ml-auto text-xs ${
+                            c.status === "active"
+                              ? "border-emerald-600 text-emerald-600"
+                              : c.status === "expired"
+                                ? "border-orange-500 text-orange-500"
+                                : c.status === "error"
+                                  ? "border-red-600 text-red-600"
+                                  : ""
+                          }`}
+                        >
+                          {c.status === "active"
+                            ? "Ativo"
+                            : c.status === "expired"
+                              ? "Expirado"
+                              : c.status === "error"
+                                ? "Erro"
+                                : c.status}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
                   <p className="text-sm text-muted-foreground">
-                    Cliente: <span className="text-foreground font-medium">{clientName}</span>
+                    {erp.available
+                      ? `Conecte sua conta do ${erp.name} para começar.`
+                      : "Em desenvolvimento."}
                   </p>
-                )}
-                {!connected_ && erp.available && (
-                  <p className="text-sm text-muted-foreground">
-                    Conecte sua conta do {erp.name} para começar.
-                  </p>
-                )}
-                {!erp.available && (
-                  <p className="text-sm text-muted-foreground">Em desenvolvimento.</p>
                 )}
               </CardContent>
 
               <CardFooter className="gap-2">
-                {erp.available && !connected_ && (
+                {erp.available && (
                   <Button
                     className="w-full"
                     onClick={() => setSelectedERP(erp)}
