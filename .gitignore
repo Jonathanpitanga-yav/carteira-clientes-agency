@@ -1,16 +1,23 @@
-# Temp
-schemas_dump.sql
-supabase/.temp/
-
-# Node
-node_modules/
-.next/
-
 # Env
 .env
 .env.local
 .env.*.local
 
+# Node
+node_modules/
+.next/
+
+# Temp
+schemas_dump.sql
+supabase/.temp/
+
+# Python
+*.pyc
+__pycache__/
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
