@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   description: "Gestão de Carteira de Clientes para Agências",
 }
 
+const themeScript = `
+(function(){try{var t=localStorage.getItem('theme')||'dark';var r=t==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t;document.documentElement.classList.remove('light','dark');document.documentElement.classList.add(r);document.documentElement.style.colorScheme=r}catch(e){}})()
+`
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -35,6 +39,9 @@ export default function RootLayout({
       className={`${sora.variable} ${outfit.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <QueryProvider>
           <ThemeProvider>
