@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import type { Session, User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, createCoreClient } from "@/lib/supabase/client"
 import type { Role } from "@/lib/constants"
 
 type AuthContext = {
@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
 
   const fetchRole = useCallback(async (userId: string) => {
-    const { data: profile } = await supabase
+    const { data: profile } = await createCoreClient()
       .from("profiles")
       .select("role")
       .eq("id", userId)
