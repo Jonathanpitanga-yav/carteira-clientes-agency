@@ -25,6 +25,13 @@ export type Integration = {
   provider_slug?: string
 }
 
+export type ConnectedApp = Integration & {
+  token_expires_at: string | null
+  token_updated_at: string | null
+  has_refresh_token: boolean
+  auth_type: string | null
+}
+
 export function useIntegrations() {
   return useQuery({
     queryKey: [QUERY_KEYS.INTEGRATIONS],
@@ -65,6 +72,57 @@ export function useIntegrations() {
         provider_name: providerMap.get(row.provider_id),
         provider_slug: providerSlugMap.get(row.provider_id),
       })) as Integration[]
+    },
+  })
+}
+
+export function useConnectedApps() {
+  return useQuery({
+    queryKey: [QUERY_KEYS.INTEGRATIONS, "connected"],
+    queryFn: async () => {
+      const { data: apps, error } = await getIntegration()
+        .from("client_applications")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+
+      const appIds = apps.map((a: any) => a.id)
+      const clientIds = [...new Set(apps.map((a: any) => a.client_id))]
+      const providerIds = [...new Set(apps.map((a: any) => a.provider_id))]
+
+      const [clientsRes, providersRes, tokensRes] = await Promise.all([
+        getCore().from("clients").select("id, name").in("id", clientIds),
+        getIntegration().from("erp_providers").select("id, name, display_name, auth_type").in("id", providerIds),
+        appIds.length > 0
+          ? getIntegration().from("tokens").select("app_id, expires_at, refresh_token, updated_at").in("app_id", appIds)
+          : { data: [], error: null },
+      ])
+
+      const clientMap = new Map<string, string>((clientsRes.data || []).map((c: any) => [c.id, c.name]))
+      const providerMap = new Map<string, { id: string; name: string; display_name: string; auth_type: string }>((providersRes.data || []).map((p: any) => [p.id, p]))
+      const tokenMap = new Map<string, { app_id: string; expires_at: string | null; refresh_token: string | null; updated_at: string | null }>((tokensRes.data || []).map((t: any) => [t.app_id, t]))
+
+      return (apps as any[]).map((row) => {
+        const provider = providerMap.get(row.provider_id)
+        const token = tokenMap.get(row.id)
+        return {
+          id: row.id,
+          client_id: row.client_id,
+          provider_id: row.provider_id,
+          app_name: row.app_name,
+          status: row.status,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          client_name: clientMap.get(row.client_id),
+          provider_name: provider?.display_name,
+          provider_slug: provider?.name,
+          auth_type: provider?.auth_type ?? null,
+          token_expires_at: token?.expires_at ?? null,
+          token_updated_at: token?.updated_at ?? null,
+          has_refresh_token: !!token?.refresh_token,
+        } as ConnectedApp
+      })
     },
   })
 }
@@ -161,6 +219,25 @@ export function useSyncIntegration() {
     },
     onSuccess: () => {
       toast.success("Sincronização iniciada com sucesso!")
+    },
+    onError: (err) => toast.error(humanError(err)),
+  })
+}
+
+export function useRefreshToken() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (appId: string) => {
+      const { error } = await createClient().functions.invoke("erp-refresh-token", {
+        body: { appId },
+      })
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.INTEGRATIONS, "connected"] })
+      toast.success("Token atualizado com sucesso!")
     },
     onError: (err) => toast.error(humanError(err)),
   })

@@ -20,6 +20,7 @@ import {
   LogOut,
   Menu,
   FileText,
+  RefreshCw,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState } from "react"
@@ -35,7 +36,8 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["admin"] },
   { label: "Clientes", href: "/admin/clients", icon: <Users className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
   { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin"] },
-  { label: "Integrações", href: "/admin/integrations", icon: <Plug className="h-4 w-4" />, roles: ["admin", "analyst"] },
+  { label: "Central de Aplicativos", href: "/admin/integrations", icon: <Plug className="h-4 w-4" />, roles: ["admin"] },
+  { label: "Aplicativos Conectados", href: "/admin/connected-apps", icon: <RefreshCw className="h-4 w-4" />, roles: ["admin", "analyst"] },
   { label: "Auditoria", href: "/admin/audit-logs", icon: <History className="h-4 w-4" />, roles: ["admin"] },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
   { label: "Filas", href: "/admin/queues", icon: <Activity className="h-4 w-4" />, roles: ["admin"] },
