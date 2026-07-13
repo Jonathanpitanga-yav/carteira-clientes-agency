@@ -12,9 +12,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sidebar } from "@/components/layout/sidebar"
+import { SidebarTrigger } from "@/components/layout/sidebar"
 import { ROLE_LABELS } from "@/lib/constants"
-import { Sun, Moon, LogOut, User } from "lucide-react"
+import { Sun, Moon, LogOut, User, Menu } from "lucide-react"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
@@ -24,7 +24,7 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-4 lg:px-6">
-      <Sidebar />
+      <SidebarTrigger />
 
       <div className="flex-1" />
 
