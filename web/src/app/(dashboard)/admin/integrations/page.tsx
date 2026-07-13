@@ -1,6 +1,6 @@
 "use client"
 
-import { IntegrationList } from "@/modules/admin/components/integration/integration-list"
+import { AppStore } from "@/modules/admin/components/integration/app-store"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
 
@@ -8,10 +8,10 @@ export default function IntegrationsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Integrações ERP"
-        description="Gerencie as conexões com sistemas ERP"
+        title="Central de Aplicativos"
+        description="Conecte sua conta aos ERPs disponíveis"
       />
-      <IntegrationList />
+      <AppStore />
     </PageContainer>
   )
 }
