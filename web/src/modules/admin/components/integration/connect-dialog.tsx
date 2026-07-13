@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ExternalLink, Loader2 } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 
 type ERP = {
   id: string
@@ -29,28 +29,11 @@ type Props = {
 export function ConnectDialog({ erp, open, onOpenChange, onCredentialsSaved }: Props) {
   const [clientId, setClientId] = useState("")
   const [clientSecret, setClientSecret] = useState("")
-  const [redirecting, setRedirecting] = useState(false)
 
   if (!erp) return null
 
-  const handleConnect = async () => {
+  const handleConnect = () => {
     if (!clientId.trim() || !clientSecret.trim()) return
-    setRedirecting(true)
-
-    // Simula o redirect OAuth (futuramente será real)
-    await new Promise((r) => setTimeout(r, 1500))
-
-    if (erp.url) {
-      const params = new URLSearchParams({
-        client_id: clientId.trim(),
-        redirect_uri: `${window.location.origin}/api/integrations/${erp.id}/callback`,
-        response_type: "code",
-        state: crypto.randomUUID(),
-      })
-      window.open(`${erp.url}/authorize?${params}`, "_blank")
-    }
-
-    setRedirecting(false)
     onCredentialsSaved(clientId.trim(), clientSecret.trim())
     setClientId("")
     setClientSecret("")
@@ -107,10 +90,9 @@ export function ConnectDialog({ erp, open, onOpenChange, onCredentialsSaved }: P
           </Button>
           <Button
             onClick={handleConnect}
-            disabled={!clientId.trim() || !clientSecret.trim() || redirecting}
+            disabled={!clientId.trim() || !clientSecret.trim()}
           >
-            {redirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {redirecting ? "Redirecionando..." : "Conectar"}
+            Conectar
           </Button>
         </div>
       </DialogContent>

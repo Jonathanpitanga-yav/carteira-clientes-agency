@@ -4,6 +4,8 @@ import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+
 function getIntegration() {
   return createSchemaClient("integration")
 }
@@ -46,19 +48,14 @@ export function useIntegrations() {
       const clientIds = [...new Set(apps.map((a: any) => a.client_id))]
       const providerIds = [...new Set(apps.map((a: any) => a.provider_id))]
 
-      const { data: clients } = await getCore()
-        .from("clients")
-        .select("id, name")
-        .in("id", clientIds)
+      const [clientsRes, providersRes] = await Promise.all([
+        getCore().from("clients").select("id, name").in("id", clientIds),
+        getIntegration().from("erp_providers").select("id, name, display_name").in("id", providerIds),
+      ])
 
-      const { data: providers } = await getIntegration()
-        .from("erp_providers")
-        .select("id, name, display_name")
-        .in("id", providerIds)
-
-      const clientMap = new Map((clients || []).map((c: any) => [c.id, c.name]))
-      const providerMap = new Map((providers || []).map((p: any) => [p.id, p.display_name]))
-      const providerSlugMap = new Map((providers || []).map((p: any) => [p.id, p.name]))
+      const clientMap = new Map((clientsRes.data || []).map((c: any) => [c.id, c.name]))
+      const providerMap = new Map((providersRes.data || []).map((p: any) => [p.id, p.display_name]))
+      const providerSlugMap = new Map((providersRes.data || []).map((p: any) => [p.id, p.name]))
 
       return (apps as any[]).map((row) => ({
         id: row.id,
@@ -160,31 +157,49 @@ export function useCreateIntegrationClient() {
           client_id: client.id,
           provider_id: erp.id,
           app_name: clientName,
-          status: "active",
+          status: erp.auth_type === "api_key" ? "active" : "pending",
         })
         .select("id")
         .single()
 
       if (!app) throw new Error("Failed to create integration")
 
-      if (erp.auth_type === "api_key") {
-        const { error: credErr } = await getIntegration()
-          .from("credentials")
-          .insert({
-            app_id: app.id,
-            client_identifier: credentials.client_id,
-            client_secret: credentials.client_secret,
-          })
+      const { error: credErr } = await getIntegration()
+        .from("credentials")
+        .insert({
+          app_id: app.id,
+          client_identifier: credentials.client_id,
+          client_secret: credentials.client_secret,
+        })
 
-        if (credErr) throw credErr
-      }
+      if (credErr) throw credErr
+
+      return { appId: app.id, authType: erp.auth_type, erpId }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: [QUERY_KEYS.INTEGRATIONS] })
       qc.invalidateQueries({ queryKey: [QUERY_KEYS.CLIENTS] })
-      toast.success("Cliente cadastrado e integração ativada!")
+      if (result.authType === "api_key") {
+        toast.success("Cliente cadastrado e integração ativada!")
+      }
     },
     onError: (err) => toast.error(humanError(err)),
+  })
+}
+
+export function useGetAuthUrl() {
+  return useMutation({
+    mutationFn: async ({ appId, provider }: { appId: string; provider: string }) => {
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/erp-callback?action=authorize&app_id=${appId}&provider=${provider}`,
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error || "Erro ao obter URL de autorização")
+      }
+      const data = await res.json()
+      return data.authUrl as string
+    },
   })
 }
 

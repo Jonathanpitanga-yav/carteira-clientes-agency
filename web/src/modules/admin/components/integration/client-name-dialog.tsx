@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useCreateIntegrationClient } from "@/hooks/use-integrations"
+import { useCreateIntegrationClient, useGetAuthUrl } from "@/hooks/use-integrations"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, CheckCircle2 } from "lucide-react"
+import { Loader2, CheckCircle2, ExternalLink } from "lucide-react"
 
 type Props = {
   erpInfo: { erpId: string; clientId: string; clientSecret: string } | null
@@ -29,7 +29,10 @@ const ERP_NAMES: Record<string, string> = {
 
 export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Props) {
   const [clientName, setClientName] = useState("")
+  const [redirecting, setRedirecting] = useState(false)
+  const [authUrl, setAuthUrl] = useState<string | null>(null)
   const create = useCreateIntegrationClient()
+  const getAuthUrl = useGetAuthUrl()
 
   if (!erpInfo) return null
 
@@ -38,7 +41,7 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
   const handleConfirm = async () => {
     if (!clientName.trim()) return
 
-    await create.mutateAsync({
+    const result = await create.mutateAsync({
       erpId: erpInfo.erpId,
       clientName: clientName.trim(),
       credentials: {
@@ -47,8 +50,57 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
       },
     })
 
-    setClientName("")
-    onComplete()
+    if (result.authType === "oauth2") {
+      setRedirecting(true)
+      try {
+        const url = await getAuthUrl.mutateAsync({
+          appId: result.appId,
+          provider: result.erpId,
+        })
+        setAuthUrl(url)
+      } catch {
+        setRedirecting(false)
+      }
+    } else {
+      setClientName("")
+      onComplete()
+    }
+  }
+
+  const handleOpenUrl = () => {
+    if (authUrl) {
+      window.open(authUrl, "_blank")
+      setClientName("")
+      onComplete()
+    }
+  }
+
+  if (authUrl) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Autorizar no {erpName}</DialogTitle>
+            <DialogDescription>
+              Clique no botão abaixo para autorizar a conexão no {erpName}.
+              Você será redirecionado para a página de autenticação do {erpName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 rounded-lg bg-blue-600/10 p-3 text-sm text-blue-600">
+              <ExternalLink className="h-4 w-4 shrink-0" />
+              Após autorizar, você será redirecionado de volta automaticamente.
+            </div>
+
+            <Button className="w-full" onClick={handleOpenUrl}>
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Autorizar no {erpName}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
@@ -57,7 +109,7 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
         <DialogHeader>
           <DialogTitle>Cliente conectado</DialogTitle>
           <DialogDescription>
-            Autenticação com {erpName} realizada com sucesso!
+            Credenciais do {erpName} salvas com sucesso!
             <br />
             Dê um nome para este cliente.
           </DialogDescription>
@@ -66,7 +118,7 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-lg bg-emerald-600/10 p-3 text-sm text-emerald-600">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Autenticado via {erpName}
+            Credenciais salvas para {erpName}
           </div>
 
           <div className="space-y-2">
@@ -87,10 +139,12 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!clientName.trim() || create.isPending}
+            disabled={!clientName.trim() || create.isPending || getAuthUrl.isPending}
           >
-            {create.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirmar
+            {(create.isPending || getAuthUrl.isPending) && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {redirecting ? "Preparando autorização..." : "Confirmar"}
           </Button>
         </div>
       </DialogContent>
