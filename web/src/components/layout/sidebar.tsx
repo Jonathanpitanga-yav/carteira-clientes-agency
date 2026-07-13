@@ -21,6 +21,7 @@ import {
   Menu,
   FileText,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState } from "react"
@@ -32,12 +33,24 @@ type NavItem = {
   roles: Role[]
 }
 
-const navItems: NavItem[] = [
+type NavGroup = {
+  label: string
+  icon: React.ReactNode
+  roles: Role[]
+  children: { label: string; href: string; roles: Role[] }[]
+}
+
+const navItems: (NavItem | NavGroup)[] = [
   { label: "Dashboard", href: "/admin", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["admin"] },
   { label: "Clientes", href: "/admin/clients", icon: <Users className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
   { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin"] },
-  { label: "Central de Aplicativos", href: "/admin/integrations", icon: <Plug className="h-4 w-4" />, roles: ["admin"] },
-  { label: "Aplicativos Conectados", href: "/admin/connected-apps", icon: <RefreshCw className="h-4 w-4" />, roles: ["admin", "analyst"] },
+  {
+    label: "Integrações", icon: <Plug className="h-4 w-4" />, roles: ["admin", "analyst"],
+    children: [
+      { label: "Central de Aplicativos", href: "/admin/integrations", roles: ["admin"] },
+      { label: "Aplicativos Conectados", href: "/admin/connected-apps", roles: ["admin", "analyst"] },
+    ],
+  },
   { label: "Auditoria", href: "/admin/audit-logs", icon: <History className="h-4 w-4" />, roles: ["admin"] },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
   { label: "Filas", href: "/admin/queues", icon: <Activity className="h-4 w-4" />, roles: ["admin"] },
@@ -54,7 +67,8 @@ const navItems: NavItem[] = [
 
 function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void }) {
   const pathname = usePathname()
-  const items = navItems.filter((item) => role && item.roles.includes(role))
+  const [integrationsOpen, setIntegrationsOpen] = useState(true)
+  const filtered = navItems.filter((item) => role && item.roles.includes(role))
 
   return (
     <div className="flex h-full flex-col">
@@ -64,7 +78,58 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
         </Link>
       </div>
       <nav className="flex-1 space-y-1 p-3">
-        {items.map((item) => {
+        {filtered.map((item) => {
+          if ("children" in item) {
+            const isGroupActive = item.children.some(
+              (c) => pathname === c.href || pathname.startsWith(c.href + "/"),
+            )
+            return (
+              <div key={item.label}>
+                <button
+                  onClick={() => setIntegrationsOpen(!integrationsOpen)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    isGroupActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {item.icon}
+                  <span className="flex-1 text-left">{item.label}</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      integrationsOpen ? "" : "-rotate-90",
+                    )}
+                  />
+                </button>
+                {integrationsOpen && (
+                  <div className="ml-3 mt-1 space-y-1 border-l border-border pl-2">
+                    {item.children
+                      .filter((c) => role && c.roles.includes(role))
+                      .map((child) => {
+                        const isActive = pathname === child.href || pathname.startsWith(child.href + "/")
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                              isActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            )}
+                          >
+                            {child.label}
+                          </Link>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
             <Link

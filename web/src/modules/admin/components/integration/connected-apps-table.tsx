@@ -1,6 +1,6 @@
 "use client"
 
-import { useConnectedApps, useDeleteIntegration, useSyncIntegration, useRefreshToken } from "@/hooks/use-integrations"
+import { useConnectedApps, useDeleteIntegration } from "@/hooks/use-integrations"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,43 +12,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Plug,
-  RefreshCw,
-  Trash2,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  XCircle,
-} from "lucide-react"
+import { Plug, Trash2 } from "lucide-react"
 
 function statusBadge(status: string) {
-  const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-    active: { label: "Ativo", variant: "default" },
-    expired: { label: "Expirado", variant: "secondary" },
-    error: { label: "Erro", variant: "destructive" },
-    pending: { label: "Pendente", variant: "outline" },
+  const map: Record<string, { label: string; className: string }> = {
+    active: { label: "Ativo", className: "bg-emerald-600 text-white hover:bg-emerald-600" },
+    expired: { label: "Expirado", className: "bg-orange-500 text-white hover:bg-orange-500" },
+    error: { label: "Erro", className: "bg-red-600 text-white hover:bg-red-600" },
+    pending: { label: "Pendente", className: "bg-gray-400 text-white hover:bg-gray-400" },
   }
-  return map[status] ?? { label: status, variant: "outline" as const }
+  return map[status] ?? { label: status, className: "" }
 }
 
-function tokenStatus(expiresAt: string | null) {
-  if (!expiresAt) return { label: "Sem token", icon: XCircle, className: "text-muted-foreground" }
+function tokenLabel(expiresAt: string | null) {
+  if (!expiresAt) return { label: "Sem token", className: "text-red-500 font-medium" }
   const diff = new Date(expiresAt).getTime() - Date.now()
   const days = Math.floor(diff / 86400000)
-  const hours = Math.floor((diff % 86400000) / 3600000)
 
-  if (diff < 0) return { label: "Expirado", icon: XCircle, className: "text-destructive" }
-  if (days < 1) return { label: `${hours}h restantes`, icon: Clock, className: "text-amber-500" }
-  if (days < 7) return { label: `${days}d restantes`, icon: Clock, className: "text-amber-500" }
-  return { label: `${days}d restantes`, icon: CheckCircle2, className: "text-emerald-500" }
+  if (diff < 0) return { label: "Expirado", className: "text-orange-500 font-medium" }
+  return { label: `${days}d`, className: "text-emerald-600 font-medium" }
 }
 
 export function ConnectedAppsTable() {
   const { data: apps, isLoading, error } = useConnectedApps()
   const deleteIntegration = useDeleteIntegration()
-  const syncIntegration = useSyncIntegration()
-  const refreshToken = useRefreshToken()
 
   if (error) {
     return <div className="text-destructive">Erro ao carregar aplicativos conectados.</div>
@@ -83,7 +70,6 @@ export function ConnectedAppsTable() {
             <TableHead>ERP</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Token</TableHead>
-            <TableHead>Refresh</TableHead>
             <TableHead>Conectado desde</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
@@ -91,7 +77,7 @@ export function ConnectedAppsTable() {
         <TableBody>
           {apps.map((app) => {
             const badge = statusBadge(app.status)
-            const token = tokenStatus(app.token_expires_at)
+            const token = tokenLabel(app.token_expires_at)
 
             return (
               <TableRow key={app.id}>
@@ -105,64 +91,27 @@ export function ConnectedAppsTable() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={badge.variant} className={badge.variant === "default" ? "bg-emerald-600 text-white" : ""}>
-                    {badge.label}
-                  </Badge>
+                  <Badge className={badge.className}>{badge.label}</Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <token.icon className={`h-3.5 w-3.5 ${token.className}`} />
-                    <span className={`text-sm ${token.className}`}>{token.label}</span>
-                  </div>
-                  {app.has_refresh_token && (
-                    <span className="ml-1 text-xs text-muted-foreground">(c/ refresh)</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {app.token_updated_at
-                    ? new Date(app.token_updated_at).toLocaleString("pt-BR")
-                    : "—"}
+                  <span className={token.className}>{token.label}</span>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {new Date(app.created_at).toLocaleDateString("pt-BR")}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {app.status === "active" && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => syncIntegration.mutate(app.id)}
-                          disabled={syncIntegration.isPending}
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${syncIntegration.isPending ? "animate-spin" : ""}`} />
-                          Sincronizar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => refreshToken.mutate(app.id)}
-                          disabled={refreshToken.isPending}
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${refreshToken.isPending ? "animate-spin" : ""}`} />
-                          Refresh
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (confirm("Desativar esta integração?")) {
-                          deleteIntegration.mutate(app.id)
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (confirm("Desativar esta integração?")) {
+                        deleteIntegration.mutate(app.id)
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </TableCell>
               </TableRow>
             )
