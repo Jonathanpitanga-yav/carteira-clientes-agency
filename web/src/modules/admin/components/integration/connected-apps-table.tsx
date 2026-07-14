@@ -12,9 +12,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Plug, Trash2 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { Plug, Trash2, Info } from "lucide-react"
 
-function statusBadge(status: string) {
+function statusBadge(status: string, tokenExpiresAt: string | null) {
+  const isTokenExpired = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now()
+  const hasNoToken = !tokenExpiresAt
+
+  if (status === "active" && isTokenExpired) {
+    return { label: "Token Expirado", className: "bg-orange-500 text-white hover:bg-orange-500" }
+  }
+  if (status === "active" && hasNoToken) {
+    return { label: "Sem Token", className: "bg-red-600 text-white hover:bg-red-600" }
+  }
+
   const map: Record<string, { label: string; className: string }> = {
     active: { label: "Ativo", className: "bg-emerald-600 text-white hover:bg-emerald-600" },
     expired: { label: "Expirado", className: "bg-orange-500 text-white hover:bg-orange-500" },
@@ -81,7 +96,8 @@ export function ConnectedAppsTable() {
         </TableHeader>
         <TableBody>
           {apps.map((app) => {
-            const badge = statusBadge(app.status)
+            const badge = statusBadge(app.status, app.token_expires_at)
+            const isTokenExpired = app.token_expires_at && new Date(app.token_expires_at).getTime() < Date.now()
             const token = tokenLabel(app.token_expires_at)
 
             return (
@@ -96,7 +112,19 @@ export function ConnectedAppsTable() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge className={badge.className}>{badge.label}</Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge className={badge.className}>{badge.label}</Badge>
+                    {app.status === "active" && isTokenExpired && (
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs text-xs">
+                          Token expirou e aguarda renovação automática. A renovação é verificada a cada 30 minutos.
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className={token.className}>{token.label}</span>
