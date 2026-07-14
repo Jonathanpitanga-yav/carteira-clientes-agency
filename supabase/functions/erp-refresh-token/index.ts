@@ -14,10 +14,12 @@ Deno.serve(async (req) => {
     const audit = (event: string, appId: string | null, meta: Record<string, unknown> = {}) =>
       createAuditLog(supabase, `erp_refresh.${event}`, appId, null, meta, { category: "credentials" });
 
+    const thirtyOneMinutesFromNow = new Date(Date.now() + 31 * 60 * 1000).toISOString();
+
     const { data: expiringTokens, error: queryError } = await supabase
       .from("tokens")
       .select("app_id, access_token, refresh_token")
-      .or("expires_at.lte.now,expires_at.is.null")
+      .lte("expires_at", thirtyOneMinutesFromNow)
       .limit(50);
 
     if (queryError) {
