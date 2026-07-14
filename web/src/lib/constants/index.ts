@@ -12,10 +12,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const ROLE_PRIORITY: Role[] = ["admin", "leader", "analyst", "client"]
 
 export function getHomeForRoles(roles: Role[]): string {
-  for (const r of ROLE_PRIORITY) {
-    if (roles.includes(r)) return ROLE_HOME[r]
-  }
-  return ROUTES.LOGIN
+  return roles.length > 0 ? ROUTES.HOME : ROUTES.LOGIN
 }
 
 export function formatRoles(roles: Role[]): string {
@@ -38,16 +35,10 @@ export const QUERY_KEYS = {
 } as const
 
 export const ROUTES = {
+  HOME: "/",
   LOGIN: "/login",
   ADMIN: "/admin",
   LEADER: "/leader",
   ANALYST: "/analyst",
   CLIENT: "/client",
 } as const
-
-export const ROLE_HOME: Record<Role, string> = {
-  admin: ROUTES.ADMIN,
-  leader: ROUTES.LEADER,
-  analyst: ROUTES.ANALYST,
-  client: ROUTES.CLIENT,
-}

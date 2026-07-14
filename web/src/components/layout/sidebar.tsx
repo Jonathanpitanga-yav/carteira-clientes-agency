@@ -41,7 +41,7 @@ type NavGroup = {
 }
 
 const navItems: (NavItem | NavGroup)[] = [
-  { label: "Dashboard", href: "/admin", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["admin"] },
+  { label: "Dashboard", href: "/", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["admin", "leader", "analyst", "client"] },
   { label: "Clientes", href: "/admin/clients", icon: <Users className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
   { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin"] },
   {
@@ -60,12 +60,9 @@ const navItems: (NavItem | NavGroup)[] = [
     ],
   },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
-  { label: "Dashboard", href: "/leader", icon: <BarChart3 className="h-4 w-4" />, roles: ["leader"] },
   { label: "Faturamento", href: "/leader/billing", icon: <FileText className="h-4 w-4" />, roles: ["leader"] },
   { label: "Analistas", href: "/leader/analysts", icon: <UserCog className="h-4 w-4" />, roles: ["leader"] },
-  { label: "Dashboard", href: "/analyst", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["analyst"] },
   { label: "Produtos", href: "/analyst/products", icon: <Package className="h-4 w-4" />, roles: ["analyst"] },
-  { label: "Dashboard", href: "/client", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["client"] },
   { label: "Pedidos", href: "/client/orders", icon: <ShoppingCart className="h-4 w-4" />, roles: ["client"] },
   { label: "Produtos", href: "/client/products", icon: <Package className="h-4 w-4" />, roles: ["client"] },
   { label: "Faturamento", href: "/client/billing", icon: <FileText className="h-4 w-4" />, roles: ["client"] },
@@ -86,7 +83,7 @@ function SidebarNav({ roles, signOut }: { roles: Role[]; signOut: () => void }) 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-14 items-center border-b border-border px-6">
-        <Link href={ROUTES.ADMIN} className="font-heading text-lg font-bold">
+        <Link href={ROUTES.HOME} className="font-heading text-lg font-bold">
           Seller Wallet
         </Link>
       </div>
