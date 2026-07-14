@@ -127,6 +127,8 @@ export async function upsertInvoice(
     marketplace_id: order.marketplaceId || null,
     marketplace_name: order.marketplaceName || null,
     marketplace_order_id: order.marketplaceOrderId || null,
+    order_type: order.orderType || null,
+    sales_channel: order.salesChannel || null,
     freight_value: order.freightValue ?? 0,
     freight_paid_by: order.freightPaidBy || null,
     commission_fee: order.commissionFee ?? 0,

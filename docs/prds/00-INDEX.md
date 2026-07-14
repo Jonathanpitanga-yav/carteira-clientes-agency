@@ -1,7 +1,7 @@
 # PRD — Seller Wallet
 
 > Sistema de Gestão de Carteira de Clientes para Agências
-> **Versão:** 1.3.0  
+> **Versão:** 1.4.0  
 > **Última atualização:** 2026-07-14
 
 ---

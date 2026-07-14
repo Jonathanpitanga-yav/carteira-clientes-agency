@@ -3,10 +3,11 @@
 import { useState } from "react"
 import { useOrders } from "@/hooks/use-orders"
 import { OrdersTable } from "@/modules/orders/components/orders-table"
+import { SyncDialog } from "@/modules/orders/components/sync-dialog"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
 
-export default function ClientOrdersPage() {
+export default function LeaderOrdersPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const { data, isLoading } = useOrders({ page, pageSize })
@@ -18,13 +19,17 @@ export default function ClientOrdersPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Meus Pedidos"
-        description="Histórico de pedidos sincronizados"
-      />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          title="Pedidos"
+          description="Pedidos dos clientes gerenciados"
+        />
+        <SyncDialog />
+      </div>
       <OrdersTable
         orders={data?.orders}
         isLoading={isLoading}
+        showClient
         page={page}
         pageSize={pageSize}
         totalCount={data?.count ?? 0}

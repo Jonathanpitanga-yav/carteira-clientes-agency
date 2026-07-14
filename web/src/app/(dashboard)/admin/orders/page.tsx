@@ -1,0 +1,50 @@
+"use client"
+
+import { useState } from "react"
+import { useOrders } from "@/hooks/use-orders"
+import { OrdersTable } from "@/modules/orders/components/orders-table"
+import { SyncDialog } from "@/modules/orders/components/sync-dialog"
+import { SyncQueueStatus } from "@/modules/orders/components/sync-queue-status"
+import { PageContainer } from "@/components/layout/page-container"
+import { PageHeader } from "@/components/shared/page-header"
+
+export default function AdminOrdersPage() {
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const { data, isLoading } = useOrders({ page, pageSize })
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+    setPage(1)
+  }
+
+  return (
+    <PageContainer>
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          title="Pedidos"
+          description="Todos os pedidos sincronizados dos ERPs"
+        />
+        <SyncDialog />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-4">
+        <div className="min-w-0 lg:col-span-3">
+          <OrdersTable
+            orders={data?.orders}
+            isLoading={isLoading}
+            showClient
+            page={page}
+            pageSize={pageSize}
+            totalCount={data?.count ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </div>
+        <div>
+          <SyncQueueStatus />
+        </div>
+      </div>
+    </PageContainer>
+  )
+}

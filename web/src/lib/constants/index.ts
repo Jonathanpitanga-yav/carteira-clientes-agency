@@ -32,6 +32,8 @@ export const QUERY_KEYS = {
   API_TOKENS: "api-tokens",
   QUEUES: "queues",
   PROFILE: "profile",
+  ORDERS: "orders",
+  SYNC_QUEUE: "sync-queue",
 } as const
 
 export const ROUTES = {

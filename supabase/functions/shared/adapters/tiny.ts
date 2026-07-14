@@ -55,6 +55,8 @@ function parseOrder(o: any): ERPOrder {
   const ecommerce = o.ecommerce || {};
   const transportador = o.transportador || {};
 
+  const isMarketplace = !!(ecommerce.id || ecommerce.nome);
+
   const order: ERPOrder = {
     externalId: String(o.id),
     erpOrderNumber: o.numeroPedido ? String(o.numeroPedido) : undefined,
@@ -65,6 +67,8 @@ function parseOrder(o: any): ERPOrder {
     marketplaceId: String(ecommerce.id ?? ""),
     marketplaceName: ecommerce.nome || undefined,
     marketplaceOrderId: ecommerce.numeroPedidoEcommerce || undefined,
+    orderType: isMarketplace ? "marketplace" : "store",
+    salesChannel: ecommerce.nome || undefined,
     freightValue: Number(o.valorFrete ?? 0),
     freightPaidBy: FREIGHT_PAID_BY_MAP[String(transportador.fretePorConta ?? "")] || undefined,
     discountValue: Number(o.valorDesconto ?? 0),

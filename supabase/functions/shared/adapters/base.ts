@@ -15,6 +15,8 @@ export interface ERPOrder {
   marketplaceId?: string;
   marketplaceName?: string;
   marketplaceOrderId?: string;
+  orderType?: 'marketplace' | 'store';
+  salesChannel?: string;
   freightValue: number;
   freightPaidBy?: string;
   commissionFee?: number;

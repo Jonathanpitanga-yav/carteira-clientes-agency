@@ -39,6 +39,16 @@ async function enforceRateLimit(
   return recent;
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 20000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function throttledFetch(
   url: string,
   options: RequestInit,
@@ -63,9 +73,9 @@ export async function throttledFetch(
 
   let lastError: Error | null = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const response = await fetch(url, options);
+      const response = await fetchWithTimeout(url, options);
 
       if (response.status === 429) {
         const retryAfter = response.headers.get("Retry-After");

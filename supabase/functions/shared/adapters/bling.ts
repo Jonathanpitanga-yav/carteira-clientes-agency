@@ -20,7 +20,41 @@ const SITUACAO_TO_GLOBAL: Record<string, string> = {
   "6": "delivered",
   "7": "shipped",
   "9": "pending",
+  "10": "canceled",
+  "11": "refunded",
+  "12": "pending",
 };
+
+const SITUACAO_LABEL: Record<string, string> = {
+  "0": "Rascunho",
+  "1": "Aprovada",
+  "2": "Cancelada",
+  "3": "Devolvida",
+  "4": "Faturada",
+  "5": "Enviada",
+  "6": "Entregue",
+  "7": "Pronto Envio",
+  "9": "Pendente",
+  "10": "Cancelado",
+  "11": "Devolvido",
+  "12": "Atendido",
+};
+
+function deriveSalesChannel(o: any): string | undefined {
+  const intermediador = o.intermediador;
+  if (intermediador?.nomeUsuario) return intermediador.nomeUsuario;
+  const transporte = o.transporte || {};
+  const volumes = transporte.volumes || [];
+  const servico = volumes[0]?.servico || transporte.formaEnvio || "";
+  if (servico.includes("Magalu")) return "Magalu";
+  if (servico.includes("Shopee")) return "Shopee";
+  if (servico.includes("Mercado Envios") || servico.includes("MercadoLivre")) return "Mercado Livre";
+  const obs = o.observacoes || "";
+  if (obs.includes("Magalu")) return "Magalu";
+  if (obs.includes("Shopee")) return "Shopee";
+  if (obs.includes("Mercado")) return "Mercado Livre";
+  return undefined;
+}
 
 function parseItem(i: any): ERPOrder["items"][number] {
   return {
@@ -43,6 +77,29 @@ function parseOrder(o: any): ERPOrder {
   const volumes = transporte.volumes || [];
   const taxas = o.taxas || {};
   const desconto = o.desconto || {};
+  const intermediador = o.intermediador;
+
+  const isMarketplace = !!(o.numeroLoja || intermediador);
+
+  let marketplaceName = unidadeNegocio.nome || loja.nome || undefined;
+  if (!marketplaceName && isMarketplace) {
+    const servico = volumes[0]?.servico || transporte.formaEnvio || "";
+    const obs = o.observacoes || "";
+    if (servico.includes("Magalu") || obs.includes("Magalu")) marketplaceName = "Magalu";
+    else if (servico.includes("Shopee") || obs.includes("Shopee")) marketplaceName = "Shopee";
+    else if (servico.includes("Mercado") || obs.includes("Mercado")) marketplaceName = "Mercado Livre";
+    else if (intermediador?.nomeUsuario) marketplaceName = intermediador.nomeUsuario;
+  }
+
+  let carrierExternalId: string | undefined;
+  let carrierName: string | undefined;
+  if (contato.id && contato.nome) {
+    carrierExternalId = String(contato.id);
+    carrierName = contato.nome;
+  } else if (volumes[0]?.servico) {
+    carrierExternalId = volumes[0]?.id ? String(volumes[0].id) : undefined;
+    carrierName = volumes[0].servico;
+  }
 
   const order: ERPOrder = {
     externalId: String(o.id),
@@ -52,21 +109,23 @@ function parseOrder(o: any): ERPOrder {
     totalAmount: Number(o.total) || 0,
     totalProducts: o.totalProdutos ? Number(o.totalProdutos) : undefined,
     marketplaceId: String(loja.id || unidadeNegocio.id || ""),
-    marketplaceName: unidadeNegocio.nome || loja.nome || undefined,
+    marketplaceName,
     marketplaceOrderId: o.numeroLoja || undefined,
+    orderType: isMarketplace ? "marketplace" : "store",
+    salesChannel: deriveSalesChannel(o),
     freightValue: Number(transporte.frete ?? o.valorFrete ?? 0),
     freightPaidBy: FREIGHT_PAID_BY_MAP[String(transporte.fretePorConta ?? "")] || undefined,
     commissionFee: taxas.taxaComissao ? Number(taxas.taxaComissao) : undefined,
     commissionBase: taxas.valorBase ? Number(taxas.valorBase) : undefined,
     discountValue: desconto.valor ? Number(desconto.valor) : undefined,
-    carrierExternalId: contato.id ? String(contato.id) : undefined,
-    carrierName: contato.nome || undefined,
+    carrierExternalId,
+    carrierName,
     trackingCode: volumes[0]?.codigoRastreamento || undefined,
     trackingUrl: transporte.urlRastreamento || undefined,
     shippingMethod: volumes[0]?.servico || transporte.formaEnvio || undefined,
     shippingMethodExternalId: volumes[0]?.id ? String(volumes[0]?.id) : undefined,
     erpStatusCode: situacaoId,
-    erpStatusLabel: situacao.valor || undefined,
+    erpStatusLabel: SITUACAO_LABEL[situacaoId] || String(situacao.valor || ""),
     globalStatus: SITUACAO_TO_GLOBAL[situacaoId] || "pending",
     items: (o.itens || []).map(parseItem),
     notes: o.observacoes || undefined,
