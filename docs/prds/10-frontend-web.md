@@ -28,46 +28,62 @@
 
 ### Dashboard (autenticadas)
 
-#### Admin (`/admin/*`)
+#### Dashboard Unificado
 
 | Path | Descrição |
 |---|---|
-| `/admin` | Dashboard admin — cards de faturamento global, clientes ativos, integrações |
+| `/` | **Dashboard único** que adapta o nível de zoom conforme a role do usuário |
+
+**Níveis de zoom:**
+| Papel | O que vê |
+|---|---|
+| Admin | `BillingOverview` (4 cards) + ranking clientes + total de usuários |
+| Leader | `BillingOverview` (4 cards) + ranking clientes |
+| Analyst | `PortfolioStats` (4 cards filtrados pela carteira) |
+| Client | `AccountSummary` (4 cards com dados próprios + variação) |
+
+Rotas antigas (`/admin`, `/leader`, `/analyst`, `/client`) redirecionam para `/`.
+
+#### Módulos por papel
+
+**Admin (`/admin/*`)**
+
+| Path | Descrição |
+|---|---|
 | `/admin/clients` | CRUD de clientes |
 | `/admin/clients/new` | Novo cliente |
 | `/admin/clients/[id]/edit` | Editar cliente |
-| `/admin/users` | Gestão de usuários |
-| `/admin/connected-apps` | Aplicativos conectados — tabela com status, token restante, ações |
-| `/admin/app-store` | Central de aplicativos — grid de ERPs com botão "Conectar" |
+| `/admin/users` | Gestão de usuários com multi‑role |
+| `/admin/connected-apps` | Aplicativos conectados — status efetivo, refresh manual, delete |
+| `/admin/integrations` | Central de aplicativos — grid de ERPs |
 | `/admin/activity-history` | Histórico de atividades — filtros por categoria, evento, data |
 | `/admin/audit-logs` | Logs de auditoria do sistema |
 | `/admin/queues` | Monitoramento de filas de retry |
+| `/admin/api-tokens` | Tokens de API M2M |
 
-#### Líder (`/leader/*`)
+**Líder (`/leader/*`)**
 
 | Path | Descrição |
 |---|---|
-| `/leader` | Dashboard líder — faturamento total, comparativo mensal, tabela de clientes |
 | `/leader/clients` | Gestão de carteira de clientes |
 | `/leader/analysts` | Vínculo de analistas a clientes |
+| `/leader/billing` | Faturamento detalhado |
 
-#### Analista (`/analyst/*`)
+**Analista (`/analyst/*`)**
 
 | Path | Descrição |
 |---|---|
-| `/analyst` | Dashboard analista — carteira de clientes, faturamento total, ranking de produtos |
 | `/analyst/clients/[id]` | Detalhes do cliente — histórico de vendas, métricas |
-| `/analyst/invoices` | Faturas |
 | `/analyst/products` | Ranking de produtos |
 | `/analyst/connected-apps` | Aplicativos conectados (leitura) |
 
-#### Cliente (`/client/*`)
+**Cliente (`/client/*`)**
 
 | Path | Descrição |
 |---|---|
-| `/client` | Dashboard cliente — faturamento mensal, produtos mais vendidos, faturas recentes |
 | `/client/invoices` | Lista de faturas |
 | `/client/products` | Produtos |
+| `/client/billing` | Faturamento detalhado |
 
 ## Componentes Principais
 
@@ -76,16 +92,16 @@
 | Componente | Descrição |
 |---|---|
 | `<RootLayout>` | Providers: QueryClient, Sonner, Supabase listener |
-| `<Sidebar>` | Navegação com accordions (Integrações, Auditoria e Filas) |
-| `<Topbar>` | Avatar + dropdown perfil/logout, breadcrumb |
-| `<ProtectedLayout>` | Verifica role e redireciona se acesso negado |
+| `<Sidebar>` | Navegação com accordions (Integrações, Auditoria e Filas). Itens filtrados por **interseção** entre roles do usuário e do item. Exibe labels combinados no rodapé. |
+| `<Topbar>` | Avatar + dropdown perfil/logout com labels dos múltiplos papéis |
+| `<AuthGuard>` | Verifica interseção entre `allowedRoles` e `roles` do usuário. Redireciona para `/` se sem acesso. |
 
 ### Integração
 
 | Componente | Descrição |
 |---|---|
 | `<ConnectDialog>` | Modal de conexão OAuth — passo único (nome do app → cria app + abre popup) |
-| `<ConnectedAppsTable>` | Tabela de apps com badge de status, token restante (dias+horas), delete |
+| `<ConnectedAppsTable>` | Tabela de apps com **status efetivo** (app + token), token restante (Xd Yh), botão 🔄 refresh manual (OAuth2), delete |
 | `<AppStoreGrid>` | Grid de provedores ERP com badge de conexões ativas |
 | `<ClientNameDialog>` | Dialog que cria app + salva credentials + abre popup |
 | `<OAuthListener>` | Hook `useOAuthListener` — escuta `postMessage` de popups OAuth, mostra toast |
@@ -102,26 +118,28 @@
 
 | Componente | Descrição |
 |---|---|
-| `<BillingChart>` | Gráfico de barras (faturamento mensal) |
-| `<ProductRanking>` | Top 5 produtos |
-| `<ClientCard>` | Card de cliente com métricas |
-| `<MetricCard>` | Card de métrica com ícone, valor, label |
+| `<UnifiedDashboard>` | Componente único que renderiza o zoom adequado conforme `roles`: `BillingOverview` (admin/leader), `PortfolioStats` (analyst), `AccountSummary` (client) |
+| `<BillingOverview>` | 4 StatCards: faturamento do mês, clientes ativos, pedidos, ticket médio (consolidado) |
+| `<ClientRanking>` | Top 10 clientes ativos (leader/admin) |
+| `<PortfolioStats>` | 4 StatCards filtrados pela carteira do analista |
+| `<AccountSummary>` | 4 StatCards do próprio cliente + variação vs mês anterior |
+| `<AdminCards>` | Card extra: total de usuários cadastrados (admin) |
+| `<StatCard>` | Card de métrica genérico com ícone, valor, label, loading state |
 | `<InvoicesTable>` | Tabela de faturas com status |
 | `<ClientsTable>` | Tabela de clientes |
-| `<UsersTable>` | Tabela de usuários |
+| `<UsersTable>` | Tabela de usuários com badges de múltiplos papéis |
 
 ## Hooks
 
 | Hook | Descrição |
 |---|---|
-| `use-profile.ts` | `useProfile()` — busca perfil do usuário logado por role |
+| `auth-provider.tsx` | `useAuth()` → expõe `{ user, session, roles: Role[], isLoading, signOut }`. `roles` é array (multi‑role). |
 | `use-clients.ts` | `useClients()`, `useClient(id)`, `useCreateClient()`, `useUpdateClient()`, `useDeleteClient()` |
-| `use-users.ts` | `useUsers()`, `useCreateUser()`, `useUpdateUser()`, `useDeactivateUser()` |
-| `use-integrations.ts` | `useProviders()`, `useGetAuthUrl(appId, provider)`, `useCreateIntegrationClient()`, `useDeleteIntegration(appId)`, `useListConnectedApps()` |
+| `use-users.ts` | `useUsers()`, `useUser(id)`, `useUpdateUser()` com `roles: string[]`, `useUsersStats()` contando por array |
+| `use-integrations.ts` | `useProviders()`, `useGetAuthUrl(appId, provider)`, `useCreateIntegrationClient()`, `useDeleteIntegration(appId)`, `useConnectedApps()`, `useRefreshToken(appId)` — refresh manual |
 | `use-invoices.ts` | `useInvoices(clientId?, period?)`, `useSyncInvoices(appId, dateRange)` |
 | `use-products.ts` | `useProducts(clientId?)`, `useProductRanking()` |
-| `use-dashboard.ts` | `useAdminDashboard()`, `useLeaderDashboard(period)`, `useAnalystDashboard()`, `useClientDashboard()` |
-| `use-billing.ts` | `useMonthlyBilling(clientId?, months)`, `useDailyBilling(clientId?, days)` |
+| `use-billing.ts` | `useBillingSummary()`, `useMonthlyBilling(clientId?, months)`, `useDailyBilling(clientId?, days)` |
 | `use-activity-logs.ts` | `useActivityLogs(filters)` — query `integration.audit_logs`, `useActivityEventTypes()` — distinct event types |
 | `use-audit-logs.ts` | `useAuditLogs(filters)` — query `core.audit_logs` |
 | `use-queues.ts` | `useQueueStatus()` — query `jobs.queue_status` |

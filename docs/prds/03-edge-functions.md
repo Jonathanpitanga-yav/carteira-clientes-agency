@@ -44,12 +44,19 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
 
 ### `erp-refresh-token`
 
-**Propósito:** Renovar tokens expirados em lote.
+**Propósito:** Renovar tokens prestes a expirar. Suporta batch (cron) e app única (manual).
 
 **Gatilho:** `pg_cron` a cada 30 minutos via `jobs.trigger_refresh_tokens()`.
 
-**Fluxo:**
-1. Busca tokens com `expires_at <= now()` ou `expires_at IS NULL` (limite 50)
+**Modos de operação:**
+
+| Modo | Chamada | Comportamento |
+|---|---|---|
+| Batch | GET (cron) ou POST sem body | Busca tokens com `expires_at ≤ now + 31min` (antecipa 30 min), limite 50 |
+| Single | POST com `{ appId }` | Renova token de uma app específica (refresh manual) |
+
+**Fluxo (batch):**
+1. Busca tokens com `expires_at ≤ now + 31min` (antecipa vencimento, evita janela sem token)
 2. Para cada token:
    - Busca `client_applications` + `credentials` + `erp_providers` separadamente (sem FK joins)
    - Obtém o adapter pelo `provider.name`
@@ -58,7 +65,13 @@ Todas as edge functions são escritas em **Deno/TypeScript** e compartilham:
    - Em caso de erro → `enqueueRetry('erp_token_retry')` + marca app como 'error'
 3. Ao final: registra `refresh_batch_complete` em audit_logs
 
+**Fluxo (single):**
+1. Busca token da `appId` específica
+2. Mesmo fluxo de refresh do batch
+3. Retorna resultado individual
+
 **Auditoria:** Cada token processado registra log em `integration.audit_logs` com `category: "credentials"`.
+Eventos: `refresh_single_start`, `refresh_single_complete`, `refresh_batch_start`, `refresh_batch_complete`.
 
 ---
 
