@@ -9,7 +9,10 @@ node_modules/
 
 # Temp
 schemas_dump.sql
+web/migrate-schemas.sql
 supabase/.temp/
+.deploy-payloads/
+.tmp-*.ts
 
 # Python
 *.pyc
@@ -25,8 +28,10 @@ Thumbs.db
 # Playwright
 .playwright-mcp/
 
-# SQL scripts
+# SQL scripts ad-hoc (migrations versionadas abaixo)
 *.sql
+!supabase/migrations/**
+!seller-wallet/supabase/migrations/**
 
 # Temp scripts
 seed-admin.*
