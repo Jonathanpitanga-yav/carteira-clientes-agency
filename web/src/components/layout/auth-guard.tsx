@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/providers/auth-provider"
-import { ROUTES, ROLE_HOME, type Role } from "@/lib/constants"
+import { ROUTES, getHomeForRoles, type Role } from "@/lib/constants"
 import { Loader2 } from "lucide-react"
 
 type AuthGuardProps = {
@@ -12,8 +12,10 @@ type AuthGuardProps = {
 }
 
 export function AuthGuard({ allowedRoles, children }: AuthGuardProps) {
-  const { user, role, isLoading } = useAuth()
+  const { user, roles, isLoading } = useAuth()
   const router = useRouter()
+
+  const hasAccess = roles.some((r) => allowedRoles.includes(r))
 
   useEffect(() => {
     if (isLoading) return
@@ -23,11 +25,10 @@ export function AuthGuard({ allowedRoles, children }: AuthGuardProps) {
       return
     }
 
-    if (role && !allowedRoles.includes(role)) {
-      const home = ROLE_HOME[role] ?? ROUTES.LOGIN
-      router.push(home)
+    if (roles.length > 0 && !hasAccess) {
+      router.push(getHomeForRoles(roles))
     }
-  }, [user, role, isLoading, allowedRoles, router])
+  }, [user, roles, isLoading, allowedRoles, hasAccess, router])
 
   if (isLoading) {
     return (
@@ -37,7 +38,7 @@ export function AuthGuard({ allowedRoles, children }: AuthGuardProps) {
     )
   }
 
-  if (!user || !role || !allowedRoles.includes(role)) {
+  if (!user || roles.length === 0 || !hasAccess) {
     return null
   }
 

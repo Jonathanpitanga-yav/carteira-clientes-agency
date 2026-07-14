@@ -8,7 +8,7 @@ import type { Role } from "@/lib/constants"
 type AuthContext = {
   user: User | null
   session: Session | null
-  role: Role | null
+  roles: Role[]
   isLoading: boolean
   signOut: () => Promise<void>
 }
@@ -16,7 +16,7 @@ type AuthContext = {
 const AuthContext = createContext<AuthContext>({
   user: null,
   session: null,
-  role: null,
+  roles: [],
   isLoading: true,
   signOut: async () => {},
 })
@@ -24,18 +24,18 @@ const AuthContext = createContext<AuthContext>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [role, setRole] = useState<Role | null>(null)
+  const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClient()
 
-  const fetchRole = useCallback(async (userId: string) => {
+  const fetchRoles = useCallback(async (userId: string) => {
     const { data: profile } = await createCoreClient()
       .from("profiles")
-      .select("role")
+      .select("roles")
       .eq("id", userId)
       .maybeSingle()
 
-    return (profile?.role as Role) ?? null
+    return (profile?.roles as Role[]) ?? []
   }, [])
 
   useEffect(() => {
@@ -46,8 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u)
 
       if (u) {
-        const r = await fetchRole(u.id)
-        setRole(r)
+        const r = await fetchRoles(u.id)
+        setRoles(r)
       }
 
       setIsLoading(false)
@@ -62,10 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(u)
 
         if (u) {
-          const r = await fetchRole(u.id)
-          setRole(r)
+          const r = await fetchRoles(u.id)
+          setRoles(r)
         } else {
-          setRole(null)
+          setRoles([])
         }
 
         setIsLoading(false)
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, role, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, session, roles, isLoading, signOut }}>
       {children}
     </AuthContext.Provider>
   )

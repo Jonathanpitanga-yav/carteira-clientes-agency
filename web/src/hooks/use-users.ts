@@ -12,6 +12,7 @@ export type UserProfile = {
   id: string
   full_name: string | null
   role: string | null
+  roles: string[]
   created_at: string
   email?: string
 }
@@ -50,7 +51,7 @@ export function useUser(id: string) {
 
 export type UserInput = {
   full_name: string
-  role: string
+  roles: string[]
 }
 
 export function useUpdateUser() {
@@ -77,15 +78,15 @@ export function useUsersStats() {
   return useQuery({
     queryKey: [QUERY_KEYS.USERS, "stats"],
     queryFn: async () => {
-      const { data, error } = await getSupabase().from("profiles").select("role")
+      const { data, error } = await getSupabase().from("profiles").select("roles")
       if (error) throw error
-      const rows = data as { role: string | null }[]
+      const rows = data as { roles: string[] }[]
       return {
         total: rows.length,
-        admins: rows.filter((r) => r.role === "admin").length,
-        leaders: rows.filter((r) => r.role === "leader").length,
-        analysts: rows.filter((r) => r.role === "analyst").length,
-        clients: rows.filter((r) => r.role === "client").length,
+        admins: rows.filter((r) => r.roles?.includes("admin")).length,
+        leaders: rows.filter((r) => r.roles?.includes("leader")).length,
+        analysts: rows.filter((r) => r.roles?.includes("analyst")).length,
+        clients: rows.filter((r) => r.roles?.includes("client")).length,
       }
     },
   })

@@ -14,20 +14,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useUpdateUser, type UserProfile } from "@/hooks/use-users"
 import { ROLES, ROLE_LABELS, type Role } from "@/lib/constants"
 import { Loader2 } from "lucide-react"
 
 const schema = z.object({
   full_name: z.string().min(1, "Nome é obrigatório"),
-  role: z.string().min(1, "Papel é obrigatório"),
+  roles: z.array(z.string()).min(1, "Selecione pelo menos um papel"),
 })
 
 type FormData = z.infer<typeof schema>
@@ -44,13 +38,23 @@ export function UserFormDialog({ user, open, onOpenChange }: Props) {
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } =
     useForm<FormData>({
       resolver: zodResolver(schema),
-      defaultValues: { full_name: user.full_name ?? "", role: user.role ?? "" },
+      defaultValues: { full_name: user.full_name ?? "", roles: user.roles ?? [user.role ?? "client"] },
     })
 
   useEffect(() => {
     setValue("full_name", user.full_name ?? "")
-    setValue("role", user.role ?? "")
+    setValue("roles", user.roles ?? [user.role ?? "client"])
   }, [user, setValue])
+
+  const selectedRoles = watch("roles") ?? []
+
+  const toggleRole = (role: string) => {
+    const current = selectedRoles
+    const next = current.includes(role)
+      ? current.filter((r: string) => r !== role)
+      : [...current, role]
+    setValue("roles", next, { shouldValidate: true })
+  }
 
   const onSubmit = async (data: FormData) => {
     await update.mutateAsync({ id: user.id, ...data })
@@ -74,19 +78,21 @@ export function UserFormDialog({ user, open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Papel</Label>
-            <Select value={watch("role") ?? ""} onValueChange={(v) => setValue("role", v ?? "")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {ROLE_LABELS[r as Role]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Papéis</Label>
+            <div className="space-y-2 rounded-lg border p-3">
+              {ROLES.filter((r) => r !== "client").map((r) => (
+                <label key={r} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedRoles.includes(r)}
+                    onCheckedChange={() => toggleRole(r)}
+                  />
+                  {ROLE_LABELS[r as Role]}
+                </label>
+              ))}
+            </div>
+            {errors.roles && (
+              <p className="text-xs text-destructive">{errors.roles.message}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

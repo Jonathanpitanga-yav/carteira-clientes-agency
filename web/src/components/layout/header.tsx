@@ -13,12 +13,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/layout/sidebar"
-import { ROLE_LABELS } from "@/lib/constants"
+import { formatRoles } from "@/lib/constants"
 import { Sun, Moon, LogOut, User, Menu } from "lucide-react"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
-  const { user, role, signOut } = useAuth()
+  const { user, roles, signOut } = useAuth()
 
   const initials = user?.email?.charAt(0).toUpperCase() ?? "?"
 
@@ -46,9 +46,9 @@ export function Header() {
           <DropdownMenuLabel>
             <div className="flex flex-col gap-1">
               <span className="text-sm font-medium">{user?.email}</span>
-              {role && (
+              {roles.length > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {ROLE_LABELS[role]}
+                  {formatRoles(roles)}
                 </span>
               )}
             </div>

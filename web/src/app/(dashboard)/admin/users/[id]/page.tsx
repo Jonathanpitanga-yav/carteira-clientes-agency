@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ROLE_LABELS, type Role } from "@/lib/constants"
+import { formatRoles } from "@/lib/constants"
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -44,10 +45,14 @@ export default function UserDetailPage() {
             <span className="font-mono">{user.id}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Papel</span>
-            <Badge variant="outline">
-              {ROLE_LABELS[user.role as Role] ?? user.role}
-            </Badge>
+            <span className="text-muted-foreground">Papéis</span>
+            <div className="flex flex-wrap gap-1">
+              {(user.roles?.length ? user.roles : [user.role]).map((r) => (
+                <Badge key={r} variant="outline">
+                  {ROLE_LABELS[r as Role] ?? r}
+                </Badge>
+              ))}
+            </div>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Criado em</span>

@@ -3,18 +3,18 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/providers/auth-provider"
-import { ROLE_HOME } from "@/lib/constants"
+import { getHomeForRoles } from "@/lib/constants"
 import { Loader2 } from "lucide-react"
 
 export default function DashboardRoot() {
-  const { role, isLoading } = useAuth()
+  const { roles, isLoading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && role) {
-      router.push(ROLE_HOME[role])
+    if (!isLoading && roles.length > 0) {
+      router.push(getHomeForRoles(roles))
     }
-  }, [role, isLoading, router])
+  }, [roles, isLoading, router])
 
   return (
     <div className="flex h-full items-center justify-center">

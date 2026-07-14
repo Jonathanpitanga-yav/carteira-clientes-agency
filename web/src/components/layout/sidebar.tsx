@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/providers/auth-provider"
-import { ROUTES, ROLE_LABELS, type Role } from "@/lib/constants"
+import { ROUTES, formatRoles, type Role } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -71,7 +71,7 @@ const navItems: (NavItem | NavGroup)[] = [
   { label: "Faturamento", href: "/client/billing", icon: <FileText className="h-4 w-4" />, roles: ["client"] },
 ]
 
-function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void }) {
+function SidebarNav({ roles, signOut }: { roles: Role[]; signOut: () => void }) {
   const pathname = usePathname()
   const [groupsOpen, setGroupsOpen] = useState<Record<string, boolean>>({})
   const toggleGroup = useCallback((label: string) => {
@@ -81,7 +81,7 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
     if (label in groupsOpen) return groupsOpen[label]
     return true // default open
   }, [groupsOpen])
-  const filtered = navItems.filter((item) => role && item.roles.includes(role))
+  const filtered = navItems.filter((item) => roles.some((r) => item.roles.includes(r)))
 
   return (
     <div className="flex h-full flex-col">
@@ -120,7 +120,7 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
                 {open && (
                   <div className="ml-3 mt-1 space-y-1 border-l border-border pl-2">
                     {item.children
-                      .filter((c) => role && c.roles.includes(role))
+                      .filter((c) => roles.some((r) => c.roles.includes(r)))
                       .map((child) => {
                         const isActive = pathname === child.href || pathname.startsWith(child.href + "/")
                         return (
@@ -163,9 +163,9 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
         })}
       </nav>
       <div className="border-t border-border p-3">
-        {role && (
+        {roles.length > 0 && (
           <div className="mb-2 px-3 text-xs text-muted-foreground">
-            {ROLE_LABELS[role]}
+            {formatRoles(roles)}
           </div>
         )}
         <Button
@@ -183,17 +183,17 @@ function SidebarNav({ role, signOut }: { role: Role | null; signOut: () => void 
 }
 
 export function Sidebar() {
-  const { role, signOut } = useAuth()
+  const { roles, signOut } = useAuth()
 
   return (
     <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-border">
-      <SidebarNav role={role} signOut={signOut} />
+      <SidebarNav roles={roles} signOut={signOut} />
     </aside>
   )
 }
 
 export function SidebarTrigger() {
-  const { role, signOut } = useAuth()
+  const { roles, signOut } = useAuth()
   const [open, setOpen] = useState(false)
 
   return (
@@ -206,7 +206,7 @@ export function SidebarTrigger() {
         <Menu className="h-5 w-5" />
       </SheetTrigger>
       <SheetContent side="left" className="w-60 p-0">
-        <SidebarNav role={role} signOut={() => { setOpen(false); signOut() }} />
+        <SidebarNav roles={roles} signOut={() => { setOpen(false); signOut() }} />
       </SheetContent>
     </Sheet>
   )

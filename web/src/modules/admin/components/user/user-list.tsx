@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Pencil } from "lucide-react"
 import { ROLE_LABELS, type Role } from "@/lib/constants"
+import { formatRoles } from "@/lib/constants"
 import { useState } from "react"
 import { UserFormDialog } from "./user-form"
 
@@ -57,9 +58,13 @@ export function UserList() {
                       {user.full_name ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">
-                        {ROLE_LABELS[user.role as Role] ?? user.role}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {(user.roles?.length ? user.roles : [user.role]).map((r) => (
+                          <Badge key={r} variant="outline">
+                            {ROLE_LABELS[r as Role] ?? r}
+                          </Badge>
+                        ))}
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(user.created_at).toLocaleDateString("pt-BR")}
