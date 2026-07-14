@@ -14,26 +14,47 @@ Deno.serve(async (req) => {
     const audit = (event: string, appId: string | null, meta: Record<string, unknown> = {}) =>
       createAuditLog(supabase, `erp_refresh.${event}`, appId, null, meta, { category: "credentials" });
 
-    const thirtyOneMinutesFromNow = new Date(Date.now() + 31 * 60 * 1000).toISOString();
+    // Support single-app refresh via POST body { appId }
+    let singleAppId: string | null = null;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        singleAppId = body?.appId || null;
+      } catch {
+        // not JSON or no body — proceed as batch
+      }
+    }
 
-    const { data: expiringTokens, error: queryError } = await supabase
-      .from("tokens")
-      .select("app_id, access_token, refresh_token")
-      .lte("expires_at", thirtyOneMinutesFromNow)
-      .limit(50);
+    let expiringTokens: any[];
 
-    if (queryError) {
-      log("query_error", { error: queryError.message });
-      return jsonResponse({ error: `Erro ao buscar tokens: ${queryError.message}` }, 500);
+    if (singleAppId) {
+      log("single_app_refresh", { appId: singleAppId });
+      const { data, error } = await supabase
+        .from("tokens")
+        .select("app_id, access_token, refresh_token")
+        .eq("app_id", singleAppId)
+        .limit(1);
+      if (error) return jsonResponse({ error: error.message }, 500);
+      expiringTokens = data || [];
+    } else {
+      const thirtyOneMinutesFromNow = new Date(Date.now() + 31 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("tokens")
+        .select("app_id, access_token, refresh_token")
+        .lte("expires_at", thirtyOneMinutesFromNow)
+        .limit(50);
+      if (error) return jsonResponse({ error: error.message }, 500);
+      expiringTokens = data || [];
     }
 
     if (!expiringTokens || expiringTokens.length === 0) {
-      log("no_tokens_to_renew");
-      return jsonResponse({ message: "Nenhum token para renovar.", renewed: 0 });
+      const msg = singleAppId ? "Token não encontrado." : "Nenhum token para renovar.";
+      log("no_tokens_to_renew", { singleAppId });
+      return jsonResponse({ message: msg, renewed: 0 });
     }
 
-    log("tokens_found", { count: expiringTokens.length });
-    await audit("refresh_batch_start", null, { count: expiringTokens.length });
+    log("tokens_found", { count: expiringTokens.length, singleAppId });
+    await audit(singleAppId ? "refresh_single_start" : "refresh_batch_start", singleAppId, { count: expiringTokens.length });
 
     let renewed = 0;
     let failed = 0;
@@ -108,8 +129,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    log("refresh_complete", { renewed, failed });
-    await audit("refresh_batch_complete", null, { renewed, failed, total: expiringTokens.length });
+    log("refresh_complete", { renewed, failed, singleAppId });
+    await audit(singleAppId ? "refresh_single_complete" : "refresh_batch_complete", singleAppId, { renewed, failed, total: expiringTokens.length });
 
     return jsonResponse({
       message: `Tokens renovados: ${renewed}, falhas: ${failed}`,

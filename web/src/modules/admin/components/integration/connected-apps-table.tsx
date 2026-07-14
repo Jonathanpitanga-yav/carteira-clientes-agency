@@ -1,6 +1,6 @@
 "use client"
 
-import { useConnectedApps, useDeleteIntegration } from "@/hooks/use-integrations"
+import { useConnectedApps, useDeleteIntegration, useRefreshToken } from "@/hooks/use-integrations"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,7 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Plug, Trash2, Info } from "lucide-react"
+import { Plug, Trash2, RefreshCw, Info, Loader2 } from "lucide-react"
 
 function statusBadge(status: string, tokenExpiresAt: string | null) {
   const isTokenExpired = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now()
@@ -56,6 +56,11 @@ function tokenLabel(expiresAt: string | null) {
 export function ConnectedAppsTable() {
   const { data: apps, isLoading, error } = useConnectedApps()
   const deleteIntegration = useDeleteIntegration()
+  const refreshToken = useRefreshToken()
+
+  const handleRefresh = (appId: string) => {
+    refreshToken.mutate(appId)
+  }
 
   if (error) {
     return <div className="text-destructive">Erro ao carregar aplicativos conectados.</div>
@@ -133,18 +138,35 @@ export function ConnectedAppsTable() {
                   {new Date(app.created_at).toLocaleDateString("pt-BR")}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => {
-                      if (confirm("Desativar esta integração?")) {
-                        deleteIntegration.mutate(app.id)
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    {app.auth_type === "oauth2" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={refreshToken.isPending && refreshToken.variables === app.id}
+                        onClick={() => handleRefresh(app.id)}
+                        title="Renovar token manualmente"
+                      >
+                        {refreshToken.isPending && refreshToken.variables === app.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (confirm("Desativar esta integração?")) {
+                          deleteIntegration.mutate(app.id)
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )
