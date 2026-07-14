@@ -1,7 +1,7 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
   getIntegrationClient, enqueueRetry,
-  upsertInvoice, upsertInvoiceItems, upsertProduct,
+  upsertInvoice, upsertInvoiceItems, upsertProduct, upsertDictionary,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
 
@@ -48,6 +48,10 @@ Deno.serve(async (req) => {
     let page = 1;
     let hasMore = true;
 
+    const discoveredCarriers = new Map<string, { name: string; carrierType?: string }>();
+    const discoveredMarketplaces = new Map<string, { name: string }>();
+    const discoveredStatuses = new Map<string, { label: string; global: string }>();
+
     while (hasMore) {
       try {
         const result = await adapter.fetchOrders(accessToken, {
@@ -58,11 +62,39 @@ Deno.serve(async (req) => {
 
         for (const order of result.orders) {
           try {
-            const invoiceId = await upsertInvoice(supabase, app.client_id, appId, order);
-            for (const item of order.items) {
+            let fullOrder = order;
+            if (adapter.fetchOrderById && order.items.length === 0 && order.externalId) {
+              try {
+                fullOrder = await adapter.fetchOrderById(accessToken, order.externalId);
+              } catch (err: any) {
+                console.error(
+                  `Erro ao buscar detalhes do pedido ${order.externalId}: ${err.message}`
+                );
+              }
+            }
+
+            const invoiceId = await upsertInvoice(supabase, app.client_id, appId, fullOrder);
+            for (const item of fullOrder.items) {
               await upsertProduct(supabase, app.client_id, appId, item);
             }
-            await upsertInvoiceItems(supabase, invoiceId, order.items);
+            await upsertInvoiceItems(supabase, invoiceId, fullOrder.items);
+
+            if (fullOrder.marketplaceId && fullOrder.marketplaceName) {
+              discoveredMarketplaces.set(fullOrder.marketplaceId, { name: fullOrder.marketplaceName });
+            }
+            if (fullOrder.carrierExternalId && fullOrder.carrierName) {
+              discoveredCarriers.set(fullOrder.carrierExternalId, {
+                name: fullOrder.carrierName,
+                carrierType: fullOrder.freightPaidBy,
+              });
+            }
+            if (fullOrder.erpStatusCode) {
+              discoveredStatuses.set(fullOrder.erpStatusCode, {
+                label: fullOrder.erpStatusLabel || fullOrder.erpStatusCode,
+                global: fullOrder.globalStatus,
+              });
+            }
+
             synced++;
           } catch (err: any) {
             errors++;
@@ -84,11 +116,43 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (discoveredCarriers.size > 0) {
+      await upsertDictionary(supabase, appId, "carrier",
+        Array.from(discoveredCarriers.entries()).map(([id, v]) => ({
+          externalId: id,
+          name: v.name,
+          extra: { carrierType: v.carrierType },
+        }))
+      );
+    }
+    if (discoveredMarketplaces.size > 0) {
+      await upsertDictionary(supabase, appId, "marketplace",
+        Array.from(discoveredMarketplaces.entries()).map(([id, v]) => ({
+          externalId: id,
+          name: v.name,
+        }))
+      );
+    }
+    if (discoveredStatuses.size > 0) {
+      await upsertDictionary(supabase, appId, "status",
+        Array.from(discoveredStatuses.entries()).map(([code, v]) => ({
+          externalId: code,
+          name: v.label,
+          extra: { globalStatus: v.global },
+        }))
+      );
+    }
+
     return jsonResponse({
       success: true,
       message: `Sincronização concluída. ${synced} pedidos, ${errors} erros.`,
       syncedOrders: synced,
       errors,
+      dictionaries: {
+        carriers: discoveredCarriers.size,
+        marketplaces: discoveredMarketplaces.size,
+        statuses: discoveredStatuses.size,
+      },
     });
   } catch (error: any) {
     return jsonResponse({ error: error.message || "Erro ao sincronizar dados." }, 500);

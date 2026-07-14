@@ -193,10 +193,28 @@ Faturas/pedidos importados dos ERPs.
 | `client_id` | UUID FK → core.clients | Cliente |
 | `app_id` | UUID FK → client_applications | Aplicação |
 | `external_id` | TEXT NOT NULL | ID no ERP |
-| `invoice_number` | TEXT | Número da nota/pedido |
+| `erp_order_number` | TEXT | Número do pedido no ERP |
+| `invoice_number` | TEXT | Número da nota fiscal |
 | `issue_date` | DATE NOT NULL | Data de emissão |
 | `total_amount` | NUMERIC(15,2) | Valor total |
-| `status` | TEXT CHECK('pending','approved','canceled','refunded') | Status |
+| `status` | TEXT | Código bruto do status no ERP |
+| `global_status` | TEXT FK → sales.global_order_statuses.slug | Status universal normalizado |
+| `erp_status_code` | TEXT | Código do status no ERP |
+| `erp_status_label` | TEXT | Label do status no ERP |
+| `freight_value` | NUMERIC(10,2) | Valor do frete |
+| `freight_paid_by` | TEXT | Tipo de frete (CIF/FOB/terceiros) |
+| `commission_fee` | NUMERIC(10,2) | Taxa de comissão (%) |
+| `commission_base` | NUMERIC(10,2) | Base de cálculo da comissão |
+| `discount_value` | NUMERIC(10,2) | Valor do desconto |
+| `marketplace_id` | UUID FK → sales.erp_marketplaces | Marketplace |
+| `marketplace_name` | TEXT | Nome do marketplace |
+| `marketplace_order_id` | TEXT | ID do pedido no marketplace |
+| `carrier_id` | UUID FK → sales.erp_carriers | Transportadora |
+| `carrier_name` | TEXT | Nome da transportadora |
+| `tracking_code` | TEXT | Código de rastreio |
+| `tracking_url` | TEXT | URL de rastreio |
+| `shipping_method` | TEXT | Método de envio |
+| `notes` | TEXT | Observações do pedido |
 | `raw_payload` | JSONB | Dados originais |
 | `synced_at` | TIMESTAMPTZ | Última sincronização |
 
@@ -212,9 +230,62 @@ Itens de cada fatura.
 | `product_id` | UUID FK → sales.products | Produto (opcional) |
 | `external_product_id` | TEXT | ID do produto no ERP |
 | `description` | TEXT | Descrição |
+| `sku` | TEXT | SKU/Código do produto |
 | `quantity` | NUMERIC(15,4) | Quantidade |
 | `unit_price` | NUMERIC(15,2) | Preço unitário |
 | `total_amount` | NUMERIC(15,2) | Valor total |
+
+### `sales.global_order_statuses`
+Catálogo universal de status de pedido, normalizado entre ERPs.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID PK | ID |
+| `slug` | TEXT UNIQUE NOT NULL | Identificador único (ex: 'pending', 'approved', 'invoiced', 'shipped', 'delivered', 'canceled', 'refunded', 'draft', 'in_production') |
+| `display_name` | TEXT NOT NULL | Nome de exibição |
+| `color` | TEXT | Cor hexadecimal para UI |
+| `sort_order` | INTEGER | Ordem de exibição |
+
+Seed: 10 status universais (draft, pending, approved, in_production, invoiced, shipped, delivered, canceled, refunded, unknown).
+
+### `sales.erp_status_mappings`
+Mapeamento entre status de cada ERP e o status universal.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID PK | ID |
+| `provider` | TEXT NOT NULL | Nome do provedor ('bling', 'tiny') |
+| `erp_status_code` | TEXT NOT NULL | Código do status no ERP |
+| `erp_status_label` | TEXT | Label do status no ERP |
+| `global_status_slug` | TEXT FK → sales.global_order_statuses.slug | Status universal correspondente |
+
+Unique: `(provider, erp_status_code)`
+
+### `sales.erp_carriers`
+Catálogo de transportadoras extraídas dos ERPs.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID PK | ID |
+| `app_id` | UUID FK → client_applications | Aplicação |
+| `external_id` | TEXT | ID da transportadora no ERP |
+| `name` | TEXT NOT NULL | Nome da transportadora |
+| `raw_payload` | JSONB | Dados originais |
+
+Unique: `(app_id, external_id)`
+
+### `sales.erp_marketplaces`
+Catálogo de marketplaces extraídos dos ERPs.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | UUID PK | ID |
+| `app_id` | UUID FK → client_applications | Aplicação |
+| `external_id` | TEXT | ID do marketplace no ERP |
+| `name` | TEXT NOT NULL | Nome do marketplace |
+| `raw_payload` | JSONB | Dados originais |
+
+Unique: `(app_id, external_id)`
 
 ## Views — Schema `sales`
 
@@ -283,6 +354,10 @@ Faturamento diário (últimos 30 dias).
 | `sales.invoices` | via cliente | via cliente | via carteira | via vínculo | CRUD |
 | `sales.invoice_items` | via cliente | via cliente | via carteira | via vínculo | CRUD |
 | `sales.products` | via cliente | via cliente | via carteira | via vínculo | CRUD |
+| `sales.global_order_statuses` | SELECT | SELECT | SELECT | SELECT | CRUD |
+| `sales.erp_status_mappings` | SELECT | SELECT | SELECT | SELECT | CRUD |
+| `sales.erp_carriers` | via cliente | via cliente | via carteira | via vínculo | CRUD |
+| `sales.erp_marketplaces` | via cliente | via cliente | via carteira | via vínculo | CRUD |
 
 ## Extensões PostgreSQL
 

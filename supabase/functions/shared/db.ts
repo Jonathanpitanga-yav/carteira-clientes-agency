@@ -115,14 +115,32 @@ export async function upsertInvoice(
     .eq("external_id", order.externalId)
     .maybeSingle();
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     client_id: clientId,
     app_id: appId,
     external_id: order.externalId,
     invoice_number: order.invoiceNumber || null,
     issue_date: order.issueDate,
     total_amount: order.totalAmount,
-    status: order.status,
+    status: order.erpStatusCode || null,
+    erp_order_number: order.erpOrderNumber || null,
+    marketplace_id: order.marketplaceId || null,
+    marketplace_name: order.marketplaceName || null,
+    marketplace_order_id: order.marketplaceOrderId || null,
+    freight_value: order.freightValue ?? 0,
+    freight_paid_by: order.freightPaidBy || null,
+    commission_fee: order.commissionFee ?? 0,
+    commission_base: order.commissionBase ?? 0,
+    discount_value: order.discountValue ?? 0,
+    carrier_name: order.carrierName || null,
+    tracking_code: order.trackingCode || null,
+    tracking_url: order.trackingUrl || null,
+    shipping_method: order.shippingMethod || null,
+    shipping_method_external_id: order.shippingMethodExternalId || null,
+    global_status: order.globalStatus || "pending",
+    erp_status_code: order.erpStatusCode || null,
+    erp_status_label: order.erpStatusLabel || null,
+    notes: order.notes || null,
     raw_payload: order.rawPayload,
     synced_at: new Date().toISOString(),
   };
@@ -155,6 +173,7 @@ export async function upsertInvoiceItems(
   const rows = items.map((item: any) => ({
     invoice_id: invoiceId,
     external_product_id: item.externalProductId,
+    sku: item.sku || null,
     description: item.description,
     quantity: item.quantity,
     unit_price: item.unitPrice,
@@ -167,6 +186,56 @@ export async function upsertInvoiceItems(
   });
 
   if (error) throw new Error(`Erro ao salvar itens da fatura: ${error.message}`);
+}
+
+export async function upsertDictionary(
+  supabase: any,
+  appId: string,
+  dictType: "carrier" | "marketplace" | "status",
+  entries: { externalId: string; name: string; extra?: Record<string, unknown> }[]
+) {
+  const sales = getClientFromSchema(supabase, "sales");
+
+  if (entries.length === 0) return;
+
+  const table =
+    dictType === "carrier" ? "erp_carriers" :
+    dictType === "marketplace" ? "erp_marketplaces" :
+    "erp_status_mappings";
+
+  const conflictCol =
+    dictType === "status" ? "erp_status_code" : "external_id";
+
+  const rows = entries.map((e) => {
+    const base: Record<string, unknown> = {
+      app_id: appId,
+      [conflictCol]: e.externalId,
+      name: e.name,
+    };
+    if (dictType === "carrier") {
+      base.carrier_type = (e.extra?.carrierType as string) || null;
+      base.external_code = (e.extra?.externalCode as string) || null;
+      base.services = (e.extra?.services as unknown[]) || [];
+      base.metadata = (e.extra?.metadata as Record<string, unknown>) || {};
+    }
+    if (dictType === "marketplace") {
+      base.metadata = (e.extra?.metadata as Record<string, unknown>) || {};
+    }
+    if (dictType === "status") {
+      base.erp_status_label = e.name;
+      base.global_status = (e.extra?.globalStatus as string) || "pending";
+    }
+    return base;
+  });
+
+  const { error } = await sales.from(table).upsert(rows, {
+    onConflict: `app_id, ${conflictCol}`,
+    ignoreDuplicates: false,
+  });
+
+  if (error) {
+    console.error(`[upsertDictionary] Erro ao salvar ${dictType}: ${error.message}`);
+  }
 }
 
 export async function upsertProduct(

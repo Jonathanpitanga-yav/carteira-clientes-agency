@@ -1,6 +1,90 @@
 import { IERPAdapter, ERPTokenResponse, ERPOrder } from "./base.ts";
 import { throttledFetch } from "../utils/rate-limiter.ts";
 
+const FREIGHT_PAID_BY_MAP: Record<string, string> = {
+  "0": "CIF",
+  "1": "FOB",
+  "2": "terceiros",
+  "3": "proprio_remetente",
+  "4": "proprio_destinatario",
+  "9": "sem_transporte",
+};
+
+const SITUACAO_TO_GLOBAL: Record<string, string> = {
+  "0": "pending",
+  "1": "invoiced",
+  "2": "canceled",
+  "3": "approved",
+  "4": "in_production",
+  "5": "shipped",
+  "6": "delivered",
+  "7": "shipped",
+  "8": "draft",
+  "9": "pending",
+};
+
+const SITUACAO_LABEL: Record<string, string> = {
+  "0": "Aberta",
+  "1": "Faturada",
+  "2": "Cancelada",
+  "3": "Aprovada",
+  "4": "Preparando Envio",
+  "5": "Enviada",
+  "6": "Entregue",
+  "7": "Pronto Envio",
+  "8": "Dados Incompletos",
+  "9": "Não Entregue",
+};
+
+function parseItem(i: any): ERPOrder["items"][number] {
+  const prod = i.produto || {};
+  const qty = Number(i.quantidade) || 1;
+  const unitPrice = Number(i.valorUnitario) || 0;
+  return {
+    externalProductId: String(prod.id || i.idProduto || i.codigo || ""),
+    sku: prod.sku || prod.codigo || null,
+    description: prod.descricao || i.descricao || "",
+    quantity: qty,
+    unitPrice,
+    totalAmount: qty * unitPrice,
+  };
+}
+
+function parseOrder(o: any): ERPOrder {
+  const situacao = String(o.situacao ?? "");
+  const ecommerce = o.ecommerce || {};
+  const transportador = o.transportador || {};
+
+  const order: ERPOrder = {
+    externalId: String(o.id),
+    erpOrderNumber: o.numeroPedido ? String(o.numeroPedido) : undefined,
+    invoiceNumber: o.numeroPedido ? String(o.numeroPedido) : undefined,
+    issueDate: (o.data || o.dataCriacao || "").split("T")[0],
+    totalAmount: Number(o.valorTotalPedido ?? o.valor ?? 0),
+    totalProducts: o.valorTotalProdutos ? Number(o.valorTotalProdutos) : undefined,
+    marketplaceId: String(ecommerce.id ?? ""),
+    marketplaceName: ecommerce.nome || undefined,
+    marketplaceOrderId: ecommerce.numeroPedidoEcommerce || undefined,
+    freightValue: Number(o.valorFrete ?? 0),
+    freightPaidBy: FREIGHT_PAID_BY_MAP[String(transportador.fretePorConta ?? "")] || undefined,
+    discountValue: Number(o.valorDesconto ?? 0),
+    carrierExternalId: transportador.id ? String(transportador.id) : undefined,
+    carrierName: transportador.nome || undefined,
+    trackingCode: transportador.codigoRastreamento || undefined,
+    trackingUrl: transportador.urlRastreamento || undefined,
+    shippingMethod: transportador.formaEnvio || undefined,
+    shippingMethodExternalId: transportador.formaFrete || undefined,
+    erpStatusCode: situacao,
+    erpStatusLabel: SITUACAO_LABEL[situacao] || undefined,
+    globalStatus: SITUACAO_TO_GLOBAL[situacao] || "pending",
+    items: (o.itens || []).map(parseItem),
+    notes: o.observacoes || undefined,
+    rawPayload: o,
+  };
+
+  return order;
+}
+
 export class TinyAdapter implements IERPAdapter {
   name = "tiny";
   private provider = "tiny";
@@ -109,28 +193,7 @@ export class TinyAdapter implements IERPAdapter {
     const pagination = body.paginacao || {};
     const total = pagination.total || 0;
 
-    const statusMap: Record<string, ERPOrder["status"]> = {
-      "0": "pending",
-      "1": "approved",
-      "3": "approved",
-      "4": "approved",
-      "5": "approved",
-      "6": "approved",
-      "7": "approved",
-      "2": "canceled",
-      "8": "pending",
-      "9": "pending",
-    };
-
-    const orders: ERPOrder[] = rawOrders.map((o: any) => ({
-      externalId: String(o.id),
-      invoiceNumber: String(o.numeroPedido || ""),
-      issueDate: o.data?.split("T")[0] || o.data,
-      totalAmount: Number(o.valor) || 0,
-      status: statusMap[String(o.situacao)] || "pending",
-      items: [],
-      rawPayload: o,
-    }));
+    const orders: ERPOrder[] = rawOrders.map(parseOrder);
 
     return {
       orders,
@@ -138,28 +201,63 @@ export class TinyAdapter implements IERPAdapter {
     };
   }
 
+  async fetchOrderById(
+    accessToken: string,
+    externalId: string
+  ): Promise<ERPOrder> {
+    const response = await throttledFetch(
+      `${this.baseUrl}/pedidos/${externalId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      this.provider
+    );
+
+    const body = await response.json();
+    return parseOrder(body);
+  }
+
+  async fetchDictionaries(
+    accessToken: string,
+    appId: string
+  ): Promise<{
+    carriers: { externalId: string; name: string; carrierType?: string; services?: unknown[] }[];
+    marketplaces: { externalId: string; name: string }[];
+    statuses: { erpStatusCode: string; erpStatusLabel: string; globalStatus: string }[];
+  }> {
+    const [formasEnvioRes] = await Promise.all([
+      throttledFetch(
+        `${this.baseUrl}/formas-envio?situacao=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        this.provider
+      ),
+    ]);
+
+    const formasBody = await formasEnvioRes.json();
+    const formas = formasBody.itens || [];
+
+    const carriers = formas.map((f: any) => ({
+      externalId: String(f.id),
+      name: f.nome || "",
+      carrierType: f.tipo ? String(f.tipo) : undefined,
+      services: f.gatewayLogistico ? [f.gatewayLogistico] : [],
+    }));
+
+    const statuses = Object.entries(SITUACAO_TO_GLOBAL).map(([code, global]) => ({
+      erpStatusCode: code,
+      erpStatusLabel: SITUACAO_LABEL[code] || code,
+      globalStatus: global,
+    }));
+
+    return { carriers, marketplaces: [], statuses };
+  }
+
   async handleWebhook(
     payload: any,
     _headers: Record<string, string>
   ): Promise<{ eventType: string; data: ERPOrder }> {
-    const o = payload;
+    const eventType = String(payload.situacao ?? "unknown");
     return {
-      eventType: String(o.situacao || "unknown"),
-      data: {
-        externalId: String(o.id),
-        invoiceNumber: String(o.numeroPedido || ""),
-        issueDate: o.data?.split("T")[0] || o.data,
-        totalAmount: Number(o.valor) || 0,
-        status: "approved",
-        items: (o.itens || []).map((i: any) => ({
-          externalProductId: String(i.idProduto || i.codigo),
-          description: i.descricao || "",
-          quantity: Number(i.quantidade) || 1,
-          unitPrice: Number(i.valorUnitario) || 0,
-          totalAmount: Number(i.valorTotal) || 0,
-        })),
-        rawPayload: o,
-      },
+      eventType,
+      data: parseOrder(payload),
     };
   }
 }

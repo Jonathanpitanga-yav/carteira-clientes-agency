@@ -1,6 +1,6 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
-  getIntegrationClient, upsertInvoice, upsertInvoiceItems, upsertProduct,
+  getIntegrationClient, upsertInvoice, upsertInvoiceItems, upsertProduct, upsertDictionary,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
 
@@ -46,6 +46,27 @@ Deno.serve(async (req) => {
     }
 
     await upsertInvoiceItems(supabase, invoiceId, order.items);
+
+    if (order.carrierExternalId && order.carrierName) {
+      await upsertDictionary(supabase, appId, "carrier", [{
+        externalId: order.carrierExternalId,
+        name: order.carrierName,
+        extra: { carrierType: order.freightPaidBy },
+      }]);
+    }
+    if (order.marketplaceId && order.marketplaceName) {
+      await upsertDictionary(supabase, appId, "marketplace", [{
+        externalId: order.marketplaceId,
+        name: order.marketplaceName,
+      }]);
+    }
+    if (order.erpStatusCode) {
+      await upsertDictionary(supabase, appId, "status", [{
+        externalId: order.erpStatusCode,
+        name: order.erpStatusLabel || order.erpStatusCode,
+        extra: { globalStatus: order.globalStatus },
+      }]);
+    }
 
     return jsonResponse({
       success: true,

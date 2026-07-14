@@ -65,9 +65,10 @@ sequenceDiagram
 
   ERP->>EF: POST /erp-webhook (x-erp-provider, x-app-id)
   EF->>EF: adapter.handleWebhook(payload, headers)
-  EF->>DB: upsertInvoice()
-  EF->>DB: upsertInvoiceItems()
+  EF->>DB: upsertInvoice() (18+ campos: frete, comissão, marketplace, etc)
+  EF->>DB: upsertInvoiceItems() (com sku)
   EF->>DB: upsertProduct()
+  EF->>DB: upsertDictionary() (lazy: carrier, marketplace, status)
   EF-->>ERP: { success, eventType, invoiceId, itemsCount }
 ```
 
@@ -93,9 +94,12 @@ sequenceDiagram
   EF->>ERP: adapter.fetchOrders(accessToken, params)
   loop Paginação
     ERP-->>EF: Página de pedidos
+    EF->>EF: Se items vazios → fetchOrderById (enriquecimento)
     EF->>DB: upsertInvoice() + upsertInvoiceItems() + upsertProduct()
+    EF->>EF: Acumula carriers, marketplaces, status em Map
   end
-  EF-->>FE: { syncedOrders, errors }
+  EF->>DB: upsertDictionary() (lote: carriers, marketplaces, statusMappings)
+  EF-->>FE: { syncedOrders, errors, dictionaries }
   FE-->>User: Toast de sucesso com resumo
 ```
 

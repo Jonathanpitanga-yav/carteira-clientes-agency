@@ -1,6 +1,81 @@
 import { IERPAdapter, ERPTokenResponse, ERPOrder } from "./base.ts";
 import { throttledFetch } from "../utils/rate-limiter.ts";
 
+const FREIGHT_PAID_BY_MAP: Record<string, string> = {
+  "0": "CIF",
+  "1": "FOB",
+  "2": "terceiros",
+  "3": "proprio_remetente",
+  "4": "proprio_destinatario",
+  "9": "sem_transporte",
+};
+
+const SITUACAO_TO_GLOBAL: Record<string, string> = {
+  "0": "draft",
+  "1": "approved",
+  "2": "canceled",
+  "3": "refunded",
+  "4": "invoiced",
+  "5": "shipped",
+  "6": "delivered",
+  "7": "shipped",
+  "9": "pending",
+};
+
+function parseItem(i: any): ERPOrder["items"][number] {
+  return {
+    externalProductId: String(i.id || i.idProduto || i.codigo || i.produto?.id || ""),
+    sku: i.codigo || null,
+    description: i.descricaoDetalhada || i.descricao || "",
+    quantity: Number(i.quantidade) || 1,
+    unitPrice: Number(i.valor) || 0,
+    totalAmount: Number(i.valorTotal || (Number(i.quantidade) * Number(i.valor))) || 0,
+  };
+}
+
+function parseOrder(o: any): ERPOrder {
+  const situacao = o.situacao || {};
+  const situacaoId = String(situacao.id ?? situacao ?? "");
+  const loja = o.loja || {};
+  const unidadeNegocio = loja.unidadeNegocio || {};
+  const transporte = o.transporte || {};
+  const contato = transporte.contato || {};
+  const volumes = transporte.volumes || [];
+  const taxas = o.taxas || {};
+  const desconto = o.desconto || {};
+
+  const order: ERPOrder = {
+    externalId: String(o.id),
+    erpOrderNumber: o.numero ? String(o.numero) : undefined,
+    invoiceNumber: o.numero ? String(o.numero) : undefined,
+    issueDate: (o.data || o.dataEmissao || "").split("T")[0],
+    totalAmount: Number(o.total) || 0,
+    totalProducts: o.totalProdutos ? Number(o.totalProdutos) : undefined,
+    marketplaceId: String(loja.id || unidadeNegocio.id || ""),
+    marketplaceName: unidadeNegocio.nome || loja.nome || undefined,
+    marketplaceOrderId: o.numeroLoja || undefined,
+    freightValue: Number(transporte.frete ?? o.valorFrete ?? 0),
+    freightPaidBy: FREIGHT_PAID_BY_MAP[String(transporte.fretePorConta ?? "")] || undefined,
+    commissionFee: taxas.taxaComissao ? Number(taxas.taxaComissao) : undefined,
+    commissionBase: taxas.valorBase ? Number(taxas.valorBase) : undefined,
+    discountValue: desconto.valor ? Number(desconto.valor) : undefined,
+    carrierExternalId: contato.id ? String(contato.id) : undefined,
+    carrierName: contato.nome || undefined,
+    trackingCode: volumes[0]?.codigoRastreamento || undefined,
+    trackingUrl: transporte.urlRastreamento || undefined,
+    shippingMethod: volumes[0]?.servico || transporte.formaEnvio || undefined,
+    shippingMethodExternalId: volumes[0]?.id ? String(volumes[0]?.id) : undefined,
+    erpStatusCode: situacaoId,
+    erpStatusLabel: situacao.valor || undefined,
+    globalStatus: SITUACAO_TO_GLOBAL[situacaoId] || "pending",
+    items: (o.itens || []).map(parseItem),
+    notes: o.observacoes || undefined,
+    rawPayload: o,
+  };
+
+  return order;
+}
+
 export class BlingAdapter implements IERPAdapter {
   name = "bling";
   private provider = "bling";
@@ -106,34 +181,66 @@ export class BlingAdapter implements IERPAdapter {
     const body = await response.json();
     const rawOrders = body.data || [];
 
-    const statusMap: Record<string, ERPOrder["status"]> = {
-      "0": "pending",
-      "1": "approved",
-      "2": "canceled",
-      "3": "refunded",
-      "9": "pending",
-    };
-
-    const orders: ERPOrder[] = rawOrders.map((o: any) => ({
-      externalId: String(o.id),
-      invoiceNumber: o.numero,
-      issueDate: o.dataEmissao?.split("T")[0] || o.dataEmissao,
-      totalAmount: Number(o.total) || 0,
-      status: statusMap[String(o.situacao)] || "pending",
-      items: (o.itens || []).map((i: any) => ({
-        externalProductId: String(i.idProduto || i.codigo),
-        description: i.descricao || "",
-        quantity: Number(i.quantidade) || 1,
-        unitPrice: Number(i.valorUnitario) || 0,
-        totalAmount: Number(i.valorTotal) || 0,
-      })),
-      rawPayload: o,
-    }));
+    const orders: ERPOrder[] = rawOrders.map(parseOrder);
 
     return {
       orders,
       hasMore: rawOrders.length >= 100,
     };
+  }
+
+  async fetchOrderById(
+    accessToken: string,
+    externalId: string
+  ): Promise<ERPOrder> {
+    const response = await throttledFetch(
+      `https://www.bling.com.br/Api/v3/pedidos/vendas/${externalId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      this.provider
+    );
+
+    const body = await response.json();
+    const data = body.data || {};
+    return parseOrder(data);
+  }
+
+  async fetchDictionaries(
+    accessToken: string,
+    appId: string
+  ): Promise<{
+    carriers: { externalId: string; name: string; carrierType?: string; services?: unknown[] }[];
+    marketplaces: { externalId: string; name: string }[];
+    statuses: { erpStatusCode: string; erpStatusLabel: string; globalStatus: string }[];
+  }> {
+    const [logisticasRes] = await Promise.all([
+      throttledFetch(
+        "https://www.bling.com.br/Api/v3/logisticas",
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+        this.provider
+      ),
+    ]);
+
+    const logisticasBody = await logisticasRes.json();
+    const logisticas = logisticasBody.data || [];
+
+    const carriers = logisticas.map((l: any) => ({
+      externalId: String(l.id),
+      name: l.descricao || "",
+      carrierType: l.tipoIntegracao || undefined,
+      services: l.servicos || [],
+    }));
+
+    const statuses = Object.entries(SITUACAO_TO_GLOBAL).map(([code, global]) => ({
+      erpStatusCode: code,
+      erpStatusLabel: {
+        "0": "Rascunho", "1": "Aprovada", "2": "Cancelada", "3": "Devolvida",
+        "4": "Faturada", "5": "Enviada", "6": "Entregue", "7": "Pronto Envio",
+        "9": "Pendente",
+      }[code] || code,
+      globalStatus: global,
+    }));
+
+    return { carriers, marketplaces: [], statuses };
   }
 
   async handleWebhook(
@@ -144,21 +251,7 @@ export class BlingAdapter implements IERPAdapter {
     const data = payload.data || payload;
     return {
       eventType,
-      data: {
-        externalId: String(data.id),
-        invoiceNumber: data.numero,
-        issueDate: data.dataEmissao?.split("T")[0] || data.dataEmissao,
-        totalAmount: Number(data.total) || 0,
-        status: "approved",
-        items: (data.itens || []).map((i: any) => ({
-          externalProductId: String(i.idProduto || i.codigo),
-          description: i.descricao || "",
-          quantity: Number(i.quantidade) || 1,
-          unitPrice: Number(i.valorUnitario) || 0,
-          totalAmount: Number(i.valorTotal) || 0,
-        })),
-        rawPayload: data,
-      },
+      data: parseOrder(data),
     };
   }
 }

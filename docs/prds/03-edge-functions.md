@@ -88,9 +88,12 @@ Eventos: `refresh_single_start`, `refresh_single_complete`, `refresh_batch_start
 **Fluxo:**
 1. Lê headers `x-erp-provider` e `x-app-id`
 2. Obtém adapter e chama `adapter.handleWebhook(payload, headers)`
-3. Normaliza evento → `ERPOrder`
-4. `upsertInvoice()`, `upsertInvoiceItems()`, `upsertProduct()`
-5. Retorna `{ success, eventType, invoiceId, itemsCount }`
+3. Normaliza evento → `ERPOrder` (com todos os campos enriquecidos)
+4. `upsertInvoice()` (mapeia 18+ campos incluindo frete, comissão, marketplace, transportadora, tracking, global_status)
+5. `upsertInvoiceItems()` (inclui `sku`)
+6. `upsertProduct()`
+7. Lazy upsert de dicionários via `upsertDictionary()` para transportadora, marketplace e status (quando presentes)
+8. Retorna `{ success, eventType, invoiceId, itemsCount }`
 
 ---
 
@@ -113,9 +116,37 @@ Eventos: `refresh_single_start`, `refresh_single_complete`, `refresh_batch_start
 1. Valida `appId` e status da aplicação
 2. `adapter.fetchOrders(accessToken, { fromDate, toDate })`
 3. Itera páginas (100 por página)
-4. Para cada pedido: `upsertInvoice()`, `upsertInvoiceItems()`, `upsertProduct()`
-5. Em caso de erro por pedido: `enqueueRetry('erp_sync_retry')` + loga `queue.enqueued`
-6. Retorna `{ syncedOrders, errors }`
+4. Para cada pedido:
+   - Se `adapter.fetchOrderById` existir e items estiverem vazios → busca detalhes completos
+   - `upsertInvoice()` com todos os campos enriquecidos
+   - `upsertInvoiceItems()` com `sku`
+   - `upsertProduct()`
+   - Acumula transportadoras, marketplaces e status em `Map`s para upsert em lote
+5. Ao final da página: persiste dicionários acumulados via `upsertDictionary()`
+6. Em caso de erro por pedido: `enqueueRetry('erp_sync_retry')` + loga `queue.enqueued`
+7. Retorna `{ syncedOrders, errors, dictionaries: { carriers, marketplaces, statusMappings } }`
+
+---
+
+### `erp-fetch-dictionaries`
+
+**Propósito:** Sincronização sob demanda de dicionários (transportadoras, marketplaces, status) do ERP.
+
+**Gatilho:** Chamada HTTP via botão no frontend.
+
+**Body:**
+```json
+{
+  "appId": "uuid"
+}
+```
+
+**Fluxo:**
+1. Valida `appId` e busca token da aplicação
+2. Obtém adapter e chama `adapter.fetchDictionaries(accessToken, appId)` (se implementado)
+3. Para cada tipo de dicionário retornado: `upsertDictionary()` em lote
+4. Retorna `{ carriers: n, marketplaces: n, statusMappings: n }`
+5. Se adapter não implementa `fetchDictionaries`, retorna `{ message: "not supported" }`
 
 ---
 
@@ -132,9 +163,10 @@ Eventos: `refresh_single_start`, `refresh_single_complete`, `refresh_batch_start
 | `getAppCredentials(appId)` | Busca app + provider + credentials + tokens (queries separadas, sem FK joins) |
 | `saveTokens(appId, access, refresh, expires, raw)` | Upsert tokens + loga `tokens.created` ou `tokens.updated` |
 | `createAuditLog(event, appId, provider, metadata, options)` | Insere log em `integration.audit_logs` com suporte a `actorId`, `category`, `erpErrorCode` |
-| `upsertInvoice(clientId, appId, order)` | Insert ou update de fatura |
-| `upsertInvoiceItems(invoiceId, items)` | Insert de itens da fatura |
+| `upsertInvoice(clientId, appId, order)` | Insert ou update de fatura com suporte a frete, comissão, marketplace, transportadora, tracking, desconto, notas e global_status |
+| `upsertInvoiceItems(invoiceId, items)` | Insert de itens da fatura (inclui `sku`) |
 | `upsertProduct(clientId, appId, item)` | Insert de produto (se não existir) |
+| `upsertDictionary(supabase, appId, dictType, entries)` | Upsert lazy de dicionários: 'carriers', 'marketplaces', 'statusMappings' |
 | `enqueueRetry(queue, appId, error, payload)` | Enfileira mensagem de retry no pgmq + loga `queue.enqueued` em audit_logs |
 | `handleCors(req)` | Intercepta OPTIONS, retorna CORS headers |
 | `jsonResponse(data, status)` | Response JSON padronizado |
@@ -171,8 +203,14 @@ interface IERPAdapter {
   refreshToken(refreshToken, credentials): ERPTokenResponse;
   fetchOrders(accessToken, options): { orders: ERPOrder[], hasMore: boolean };
   handleWebhook(payload, headers): { eventType, data: ERPOrder };
+  fetchOrderById?(accessToken, externalId): ERPOrder;
+  fetchDictionaries?(accessToken, appId): { carriers?, marketplaces?, statusMappings? };
 }
 ```
+
+**ERPOrder** agora inclui: `erpOrderNumber`, `marketplaceId`, `marketplaceName`, `marketplaceOrderId`, `freightValue`, `freightPaidBy`, `commissionFee`, `commissionBase`, `discountValue`, `carrierExternalId`, `carrierName`, `trackingCode`, `trackingUrl`, `shippingMethod`, `erpStatusCode`, `erpStatusLabel`, `globalStatus`, `notes`.
+
+**ERPOrderItem** agora inclui: `sku`.
 
 ### BlingAdapter
 
@@ -182,8 +220,12 @@ interface IERPAdapter {
 | Auth URL | `https://www.bling.com.br/Api/v3/oauth/authorize` |
 | Token URL | `https://www.bling.com.br/Api/v3/oauth/token` |
 | Orders API | `GET /Api/v3/pedidos/vendas` |
+| Order Detail API | `GET /Api/v3/pedidos/vendas/{id}` (implementa `fetchOrderById`) |
+| Dictionaries API | `GET /logisticas` (implementa `fetchDictionaries` — transportadoras) |
 | Paginação | `pagina` + `limite` (max 100) |
 | Rate Limit | 3 req/s, 120k req/dia, 20 req/min `/oauth/token` |
+| Status Mapping | situacao → slug: 9→draft, 1→approved, 2→canceled, 3→refunded, 4→invoiced, 5→shipped, 6→delivered, 7→shipped, 9→pending |
+| Freight Mapping | tipoFrete → label: 0→CIF, 1→FOB, 2→terceiros, 3→proprio_remetente, 4→proprio_destinatario, 9→sem_transporte, null→null |
 
 ### TinyAdapter
 
@@ -194,6 +236,9 @@ interface IERPAdapter {
 | Token URL | `https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token` |
 | Scope | `openid` |
 | Orders API | `GET /public-api/v3/pedidos` |
+| Order Detail API | `GET /public-api/v3/pedidos/{id}` (implementa `fetchOrderById` — list não retorna itens) |
+| Dictionaries API | `GET /public-api/v3/formas-envio?situacao=1` (implementa `fetchDictionaries` — transportadoras) |
 | Paginação | `limit` + `offset` (max 100) |
 | Rate Limit | 60-240 req/min (por plano) |
 | Token Expiry | Access: 4h, Refresh: 1 dia |
+| Status Mapping | situacao → slug: 8→draft, 0→pending, 1→invoiced, 2→canceled, 3→approved, 4→in_production, 5→shipped, 6→delivered, 7→shipped, 9→pending |
