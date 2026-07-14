@@ -31,11 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchRoles = useCallback(async (userId: string) => {
     const { data: profile } = await createCoreClient()
       .from("profiles")
-      .select("roles")
+      .select("roles, role")
       .eq("id", userId)
       .maybeSingle()
 
-    return (profile?.roles as Role[]) ?? []
+    const roles = (profile?.roles as Role[]) ?? []
+    if (roles.length > 0) return roles
+
+    const singleRole = profile?.role as Role | null
+    return singleRole ? [singleRole] : []
   }, [])
 
   useEffect(() => {
