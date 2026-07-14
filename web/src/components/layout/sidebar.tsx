@@ -43,7 +43,7 @@ type NavGroup = {
 const navItems: (NavItem | NavGroup)[] = [
   { label: "Dashboard", href: "/", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["admin", "leader", "analyst", "client"] },
   { label: "Clientes", href: "/admin/clients", icon: <Users className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
-  { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin"] },
+  { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin", "leader"] },
   {
     label: "Integrações", icon: <Plug className="h-4 w-4" />, roles: ["admin", "analyst"],
     children: [
@@ -61,7 +61,7 @@ const navItems: (NavItem | NavGroup)[] = [
   },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
   { label: "Faturamento", href: "/leader/billing", icon: <FileText className="h-4 w-4" />, roles: ["leader"] },
-  { label: "Analistas", href: "/leader/analysts", icon: <UserCog className="h-4 w-4" />, roles: ["leader"] },
+  { label: "Analistas", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["leader"] },
   { label: "Produtos", href: "/analyst/products", icon: <Package className="h-4 w-4" />, roles: ["analyst"] },
   { label: "Pedidos", href: "/client/orders", icon: <ShoppingCart className="h-4 w-4" />, roles: ["client"] },
   { label: "Produtos", href: "/client/products", icon: <Package className="h-4 w-4" />, roles: ["client"] },
