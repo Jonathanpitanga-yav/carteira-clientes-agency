@@ -61,7 +61,6 @@ const navItems: (NavItem | NavGroup)[] = [
   },
   { label: "API Tokens", href: "/admin/api-tokens", icon: <Key className="h-4 w-4" />, roles: ["admin"] },
   { label: "Faturamento", href: "/leader/billing", icon: <FileText className="h-4 w-4" />, roles: ["leader"] },
-  { label: "Analistas", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["leader"] },
   { label: "Produtos", href: "/analyst/products", icon: <Package className="h-4 w-4" />, roles: ["analyst"] },
   { label: "Pedidos", href: "/client/orders", icon: <ShoppingCart className="h-4 w-4" />, roles: ["client"] },
   { label: "Produtos", href: "/client/products", icon: <Package className="h-4 w-4" />, roles: ["client"] },
