@@ -100,21 +100,13 @@ export function useDashboardLogistics(filters: DashboardFilters) {
   })
 }
 
-function getCurrentYearMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-}
-
 export function useDashboardAbc(filters: DashboardFilters) {
-  const currentYm = getCurrentYearMonth()
-
   return useQuery({
     queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-abc", filters],
     queryFn: async () => {
       let query = getSalesClient()
         .from("client_item_abc_curve")
         .select("*")
-        .eq("year_month", currentYm)
         .order("abc_class", { ascending: true })
         .order("rank", { ascending: true })
 
@@ -124,6 +116,14 @@ export function useDashboardAbc(filters: DashboardFilters) {
         } else {
           query = query.in("client_id", filters.clientIds)
         }
+      }
+
+      if (filters.dateFrom) {
+        query = query.gte("year_month", filters.dateFrom.substring(0, 7))
+      }
+
+      if (filters.dateTo) {
+        query = query.lte("year_month", filters.dateTo.substring(0, 7))
       }
 
       const { data, error } = await query
