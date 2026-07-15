@@ -34,6 +34,7 @@ export const QUERY_KEYS = {
   PROFILE: "profile",
   ORDERS: "orders",
   SYNC_QUEUE: "sync-queue",
+  ANALYTICS: "analytics",
 } as const
 
 export const ROUTES = {

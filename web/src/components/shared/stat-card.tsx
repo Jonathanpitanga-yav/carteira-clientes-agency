@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 type StatCardProps = {
   label: string
-  value: string | number
+  value?: string | number
   icon?: React.ReactNode
   loading?: boolean
   children?: React.ReactNode

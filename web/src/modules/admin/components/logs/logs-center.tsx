@@ -219,7 +219,7 @@ export function LogsCenter() {
           <Select
             value={filters.category ?? "all"}
             onValueChange={(v) =>
-              setFilters((prev) => ({ ...prev, category: v === "all" ? undefined : v }))
+              setFilters((prev) => ({ ...prev, category: v === "all" ? undefined : v } as SystemLogFilters))
             }
           >
             <SelectTrigger className="w-40">

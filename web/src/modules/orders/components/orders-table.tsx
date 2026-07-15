@@ -111,19 +111,19 @@ export function OrdersTable({
                   ? order.erp_status_label
                   : undefined
               const marketplaceDisplay = getGlobalMarketplaceDisplay(
-                order.global_marketplace_slug !== "unknown"
+                (order.global_marketplace_slug !== "unknown"
                   ? order.global_marketplace_slug
-                  : order.erp_marketplace_catalog_slug,
-                order.marketplace_name,
-                order.order_type,
-                order.erp_marketplace_name,
+                  : order.erp_marketplace_catalog_slug) ?? null,
+                order.marketplace_name ?? null,
+                order.order_type ?? null,
+                order.erp_marketplace_name ?? null,
               )
               const logisticsDisplay = getGlobalLogisticsDisplay(
-                order.global_logistics_slug,
-                order.erp_logistics_name || order.shipping_method || order.carrier_name,
-                order.global_marketplace_slug !== "unknown"
+                order.global_logistics_slug ?? null,
+                order.erp_logistics_name || order.shipping_method || order.carrier_name || null,
+                (order.global_marketplace_slug !== "unknown"
                   ? order.global_marketplace_slug
-                  : order.erp_marketplace_catalog_slug,
+                  : order.erp_marketplace_catalog_slug) ?? null,
               )
               return (
                 <TableRow key={order.id}>

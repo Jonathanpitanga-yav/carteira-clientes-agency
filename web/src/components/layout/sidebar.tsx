@@ -14,6 +14,7 @@ import {
   Plug,
   Key,
   Activity,
+  BarChart3,
   LogOut,
   Menu,
   ChevronDown,
@@ -40,6 +41,14 @@ const navItems: (NavItem | NavGroup)[] = [
   { label: "Clientes", href: "/admin/clients", icon: <Users className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
   { label: "Usuários", href: "/admin/users", icon: <UserCog className="h-4 w-4" />, roles: ["admin", "leader"] },
   { label: "Pedidos", href: "/admin/orders", icon: <ShoppingCart className="h-4 w-4" />, roles: ["admin", "leader", "analyst"] },
+  {
+    label: "Analytics", icon: <BarChart3 className="h-4 w-4" />, roles: ["admin", "leader", "analyst"],
+    children: [
+      { label: "Overview do Portfólio", href: "/admin/analytics", roles: ["admin", "leader", "analyst"] },
+      { label: "Share e Concentração", href: "/admin/analytics/share", roles: ["admin", "leader", "analyst"] },
+      { label: "Benchmarks & Ranking", href: "/admin/analytics/benchmarks", roles: ["admin", "leader", "analyst"] },
+    ],
+  },
   {
     label: "Integrações", icon: <Plug className="h-4 w-4" />, roles: ["admin", "analyst"],
     children: [

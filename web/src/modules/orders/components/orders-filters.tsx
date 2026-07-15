@@ -90,9 +90,9 @@ export function OrdersFilters({ filters, onChange, showClientFilter }: OrdersFil
                 )
               onChange({
                 ...filters,
-                clientId,
+                clientId: clientId ?? undefined,
                 appId: appStillValid ? filters.appId : undefined,
-              })
+              } as OrderFilters)
             }}
           >
             <SelectTrigger>
@@ -117,7 +117,7 @@ export function OrdersFilters({ filters, onChange, showClientFilter }: OrdersFil
         <Select
           value={filters.appId ?? ALL}
           onValueChange={(v) =>
-            onChange({ ...filters, appId: v === ALL ? undefined : v })
+            onChange({ ...filters, appId: v === ALL ? undefined : v } as OrderFilters)
           }
         >
           <SelectTrigger>

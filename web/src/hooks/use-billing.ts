@@ -89,7 +89,7 @@ export function useMyClientIds() {
         .eq("user_id", user!.id)
 
       if (error) throw error
-      return (data ?? []).map((r) => r.client_id as string)
+      return (data ?? []).map((r: { client_id: string }) => r.client_id)
     },
   })
 }

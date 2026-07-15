@@ -273,7 +273,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           .in("id", clientIds)
 
         if (!clientsError && clients) {
-          clientNameById = new Map(clients.map((c) => [c.id, c.name]))
+          clientNameById = new Map(clients.map((c: { id: string; name: string }) => [c.id, c.name]))
         }
       }
 
@@ -286,7 +286,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
         if (!marketplacesError && marketplaces) {
           marketplaceById = new Map(
-            marketplaces.map((m) => [
+            marketplaces.map((m: { id: string; name: string; global_marketplace_slug: string | null }) => [
               m.id,
               { name: m.name, global_marketplace_slug: m.global_marketplace_slug },
             ]),
