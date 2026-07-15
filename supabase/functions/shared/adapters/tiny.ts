@@ -1,5 +1,6 @@
 import { IERPAdapter, ERPTokenResponse, ERPOrder } from "./base.ts";
 import { throttledFetch } from "../utils/rate-limiter.ts";
+import { verifyTinyWebhookSignature } from "../utils/webhook-signature.ts";
 
 const FREIGHT_PAID_BY_MAP: Record<string, string> = {
   "0": "CIF",
@@ -8,19 +9,6 @@ const FREIGHT_PAID_BY_MAP: Record<string, string> = {
   "3": "proprio_remetente",
   "4": "proprio_destinatario",
   "9": "sem_transporte",
-};
-
-const SITUACAO_TO_GLOBAL: Record<string, string> = {
-  "0": "pending",
-  "1": "invoiced",
-  "2": "canceled",
-  "3": "approved",
-  "4": "in_production",
-  "5": "shipped",
-  "6": "delivered",
-  "7": "shipped",
-  "8": "draft",
-  "9": "pending",
 };
 
 const SITUACAO_LABEL: Record<string, string> = {
@@ -54,8 +42,15 @@ function parseOrder(o: any): ERPOrder {
   const situacao = String(o.situacao ?? "");
   const ecommerce = o.ecommerce || {};
   const transportador = o.transportador || {};
+  const formaEnvio = transportador.formaEnvio || {};
+  const formaFrete = transportador.formaFrete || {};
 
   const isMarketplace = !!(ecommerce.id || ecommerce.nome);
+
+  const formaEnvioId = formaEnvio.id ?? (typeof transportador.formaEnvio === "object" ? formaEnvio.id : undefined);
+  const formaFreteId = formaFrete.id ?? transportador.formaFrete;
+  const formaEnvioNome = formaEnvio.nome ?? (typeof transportador.formaEnvio === "string" ? transportador.formaEnvio : undefined);
+  const formaFreteNome = formaFrete.nome ?? (typeof transportador.formaFrete === "string" ? undefined : formaFrete.nome);
 
   const order: ERPOrder = {
     externalId: String(o.id),
@@ -67,20 +62,25 @@ function parseOrder(o: any): ERPOrder {
     marketplaceId: String(ecommerce.id ?? ""),
     marketplaceName: ecommerce.nome || undefined,
     marketplaceOrderId: ecommerce.numeroPedidoEcommerce || undefined,
+    marketplaceChannel: ecommerce.canalVenda || undefined,
     orderType: isMarketplace ? "marketplace" : "store",
-    salesChannel: ecommerce.nome || undefined,
+    orderOrigin: o.origemPedido != null ? String(o.origemPedido) : undefined,
+    salesChannel: ecommerce.canalVenda || ecommerce.nome || undefined,
     freightValue: Number(o.valorFrete ?? 0),
     freightPaidBy: FREIGHT_PAID_BY_MAP[String(transportador.fretePorConta ?? "")] || undefined,
     discountValue: Number(o.valorDesconto ?? 0),
-    carrierExternalId: transportador.id ? String(transportador.id) : undefined,
-    carrierName: transportador.nome || undefined,
+    carrierExternalId: formaEnvioId ? String(formaEnvioId) : (transportador.id ? String(transportador.id) : undefined),
+    carrierName: transportador.nome || formaEnvioNome || undefined,
     trackingCode: transportador.codigoRastreamento || undefined,
     trackingUrl: transportador.urlRastreamento || undefined,
-    shippingMethod: transportador.formaEnvio || undefined,
-    shippingMethodExternalId: transportador.formaFrete || undefined,
+    shippingMethod: formaFreteNome || formaEnvioNome || undefined,
+    shippingMethodExternalId: formaFreteId ? String(formaFreteId) : undefined,
+    logisticsIntegrationType: formaEnvio.tipo != null ? String(formaEnvio.tipo) : undefined,
+    shippingServiceExternalId: formaFreteId ? String(formaFreteId) : (formaEnvioId ? String(formaEnvioId) : undefined),
+    shippingServiceName: formaFreteNome || formaEnvioNome || undefined,
     erpStatusCode: situacao,
     erpStatusLabel: SITUACAO_LABEL[situacao] || undefined,
-    globalStatus: SITUACAO_TO_GLOBAL[situacao] || "pending",
+    globalStatus: "pending",
     items: (o.itens || []).map(parseItem),
     notes: o.observacoes || undefined,
     rawPayload: o,
@@ -221,37 +221,112 @@ export class TinyAdapter implements IERPAdapter {
 
   async fetchDictionaries(
     accessToken: string,
-    appId: string
+    _appId: string,
+    options?: { knownServiceIds?: Set<string> }
   ): Promise<{
     carriers: { externalId: string; name: string; carrierType?: string; services?: unknown[] }[];
-    marketplaces: { externalId: string; name: string }[];
+    marketplaces: { externalId: string; name: string; canalVenda?: string }[];
     statuses: { erpStatusCode: string; erpStatusLabel: string; globalStatus: string }[];
+    shippingServices: {
+      externalId: string;
+      name: string;
+      logisticsExternalId?: string;
+      aliases?: string[];
+      providerLogisticsType?: string;
+    }[];
   }> {
-    const [formasEnvioRes] = await Promise.all([
-      throttledFetch(
-        `${this.baseUrl}/formas-envio?situacao=1`,
+    const knownIds = options?.knownServiceIds ?? new Set<string>();
+    const allFormas: any[] = [];
+    let offset = 0;
+    const limit = 100;
+
+    while (true) {
+      const formasEnvioRes = await throttledFetch(
+        `${this.baseUrl}/formas-envio?situacao=1&limit=${limit}&offset=${offset}`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
         this.provider
-      ),
-    ]);
+      );
+      const formasBody = await formasEnvioRes.json();
+      const batch = formasBody.itens || [];
+      allFormas.push(...batch);
+      const total = formasBody.paginacao?.total ?? batch.length;
+      offset += limit;
+      if (offset >= total || batch.length === 0) break;
+    }
 
-    const formasBody = await formasEnvioRes.json();
-    const formas = formasBody.itens || [];
-
-    const carriers = formas.map((f: any) => ({
+    const carriers = allFormas.map((f: any) => ({
       externalId: String(f.id),
       name: f.nome || "",
-      carrierType: f.tipo ? String(f.tipo) : undefined,
+      carrierType: f.tipo != null ? String(f.tipo) : undefined,
       services: f.gatewayLogistico ? [f.gatewayLogistico] : [],
     }));
 
-    const statuses = Object.entries(SITUACAO_TO_GLOBAL).map(([code, global]) => ({
+    const shippingServices: {
+      externalId: string;
+      name: string;
+      logisticsExternalId?: string;
+      aliases?: string[];
+      providerLogisticsType?: string;
+    }[] = [];
+
+    for (const f of allFormas) {
+      const tipo = f.tipo != null ? String(f.tipo) : undefined;
+      if (f.formasFrete && Array.isArray(f.formasFrete)) {
+        for (const ff of f.formasFrete) {
+          shippingServices.push({
+            externalId: String(ff.id),
+            name: ff.nome || f.nome || "",
+            logisticsExternalId: String(f.id),
+            providerLogisticsType: tipo,
+          });
+        }
+      } else {
+        shippingServices.push({
+          externalId: String(f.id),
+          name: f.nome || "",
+          logisticsExternalId: String(f.id),
+          providerLogisticsType: tipo,
+        });
+      }
+    }
+
+    // Budget: fetch detail only for new unknown IDs (max 5 per cold sync)
+    let detailBudget = 5;
+    for (const f of allFormas) {
+      if (detailBudget <= 0) break;
+      const id = String(f.id);
+      if (knownIds.has(id) || (f.formasFrete && f.formasFrete.length > 0)) continue;
+      try {
+        const detailRes = await throttledFetch(
+          `${this.baseUrl}/formas-envio/${id}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+          this.provider
+        );
+        const detail = await detailRes.json();
+        detailBudget--;
+        const tipo = detail.tipo != null ? String(detail.tipo) : undefined;
+        if (detail.formasFrete && Array.isArray(detail.formasFrete)) {
+          for (const ff of detail.formasFrete) {
+            shippingServices.push({
+              externalId: String(ff.id),
+              name: ff.nome || detail.nome || "",
+              logisticsExternalId: id,
+              providerLogisticsType: tipo,
+            });
+          }
+        }
+      } catch {
+        // skip failed detail fetch
+      }
+    }
+
+    const statuses = Object.entries(SITUACAO_LABEL).map(([code, label]) => ({
       erpStatusCode: code,
-      erpStatusLabel: SITUACAO_LABEL[code] || code,
-      globalStatus: global,
+      erpStatusLabel: label,
+      globalStatus: "pending",
     }));
 
-    return { carriers, marketplaces: [], statuses };
+    return { carriers, marketplaces: [], statuses, shippingServices };
   }
 
   async handleWebhook(
@@ -262,6 +337,65 @@ export class TinyAdapter implements IERPAdapter {
     return {
       eventType,
       data: parseOrder(payload),
+    };
+  }
+
+  extractCompanyId(payload: unknown): string | null {
+    const p = payload as Record<string, unknown>;
+    if (p?.idEmpresa != null) return String(p.idEmpresa);
+    if (p?.companyId != null) return String(p.companyId);
+    const empresa = p?.empresa as Record<string, unknown> | undefined;
+    if (empresa?.id != null) return String(empresa.id);
+    return null;
+  }
+
+  async verifyWebhookSignature(
+    rawBody: string,
+    headers: Record<string, string>,
+    clientSecret: string,
+  ): Promise<boolean> {
+    const signature = headers["x-tiny-signature"] || headers["X-Tiny-Signature"];
+    return verifyTinyWebhookSignature(rawBody, signature, clientSecret);
+  }
+
+  supportedWebhookEvents(): string[] {
+    return [];
+  }
+
+  buildIdempotencyKey(payload: unknown): string {
+    const p = payload as Record<string, unknown>;
+    if (p?.id != null) return `tiny:${p.id}`;
+    const orderId = p?.idPedido ?? p?.numero ?? p?.numeroPedido;
+    const situacao = p?.situacao ?? "";
+    const updatedAt = p?.dataAlteracao ?? p?.dataAtualizacao ?? "";
+    return `tiny:${orderId}:${situacao}:${updatedAt}`;
+  }
+
+  async fetchCompanyProfile(
+    accessToken: string,
+  ): Promise<{ companyExternalId: string; companyName?: string }> {
+    const response = await throttledFetch(
+      `${this.baseUrl}/empresa`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      this.provider,
+    );
+
+    if (!response.ok) {
+      throw new Error(`Falha ao buscar dados da empresa Tiny: HTTP ${response.status}`);
+    }
+
+    const body = await response.json();
+    const company = body.data || body.empresa || body;
+    const companyExternalId = String(
+      company.id ?? company.idEmpresa ?? company.companyId ?? "",
+    );
+    if (!companyExternalId) {
+      throw new Error("Resposta Tiny sem company id.");
+    }
+
+    return {
+      companyExternalId,
+      companyName: company.nome || company.razaoSocial || company.fantasia,
     };
   }
 }

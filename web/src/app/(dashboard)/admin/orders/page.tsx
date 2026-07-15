@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useOrders } from "@/hooks/use-orders"
 import { OrdersTable } from "@/modules/orders/components/orders-table"
 import { SyncDialog } from "@/modules/orders/components/sync-dialog"
-import { SyncQueueStatus } from "@/modules/orders/components/sync-queue-status"
+import { SyncQueueNotifier } from "@/modules/orders/components/sync-queue-notifier"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
 
@@ -20,6 +20,7 @@ export default function AdminOrdersPage() {
 
   return (
     <PageContainer>
+      <SyncQueueNotifier />
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           title="Pedidos"
@@ -28,23 +29,16 @@ export default function AdminOrdersPage() {
         <SyncDialog />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        <div className="min-w-0 lg:col-span-3">
-          <OrdersTable
-            orders={data?.orders}
-            isLoading={isLoading}
-            showClient
-            page={page}
-            pageSize={pageSize}
-            totalCount={data?.count ?? 0}
-            onPageChange={setPage}
-            onPageSizeChange={handlePageSizeChange}
-          />
-        </div>
-        <div>
-          <SyncQueueStatus />
-        </div>
-      </div>
+      <OrdersTable
+        orders={data?.orders}
+        isLoading={isLoading}
+        showClient
+        page={page}
+        pageSize={pageSize}
+        totalCount={data?.count ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={handlePageSizeChange}
+      />
     </PageContainer>
   )
 }

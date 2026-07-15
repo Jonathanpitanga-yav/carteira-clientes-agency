@@ -1,83 +1,152 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
-  getIntegrationClient, upsertInvoice, upsertInvoiceItems, upsertProduct, upsertDictionary,
-  handleCors, jsonResponse,
+  getClient,
+  getIntegrationClient,
+  resolveCompanyMapping,
+  enqueueWebhookInvoice,
+  createAuditLog,
+  handleCors,
+  jsonResponse,
 } from "../shared/db.ts";
+
+function detectProvider(payload: Record<string, unknown>, headers: Record<string, string>): string | null {
+  const fromHeader = headers["x-erp-provider"] || headers["x-provider"];
+  if (fromHeader) return fromHeader.toLowerCase();
+
+  if (payload.companyId != null && payload.event != null) return "bling";
+  if (payload.situacao != null || payload.idPedido != null) return "tiny";
+
+  return null;
+}
+
+function normalizeHeaders(req: Request): Record<string, string> {
+  const headers: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headers[key.toLowerCase()] = value;
+  });
+  return headers;
+}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
 
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Método não permitido." }, 405);
+  }
+
+  const startedAt = Date.now();
+
   try {
-    const provider = req.headers.get("x-erp-provider") || req.headers.get("x-provider");
-    const appId = req.headers.get("x-app-id");
+    const rawBody = await req.text();
+    const headers = normalizeHeaders(req);
 
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return jsonResponse({ error: "JSON inválido." }, 400);
+    }
+
+    const provider = detectProvider(payload, headers);
     if (!provider) {
-      return jsonResponse({ error: "Header x-erp-provider é obrigatório." }, 400);
-    }
-    if (!appId) {
-      return jsonResponse({ error: "Header x-app-id é obrigatório." }, 400);
+      return jsonResponse({ error: "Não foi possível identificar o provedor ERP." }, 400);
     }
 
-    const payload = await req.json();
     const adapter = getAdapter(provider);
-    const { eventType, data: order } = await adapter.handleWebhook(payload, Object.fromEntries(req.headers));
+    const companyExternalId = adapter.extractCompanyId(payload);
+    const idempotencyKey = adapter.buildIdempotencyKey(payload);
+    const eventType = typeof payload.event === "string"
+      ? payload.event
+      : payload.situacao != null
+      ? String(payload.situacao)
+      : null;
 
-    if (eventType === "unknown") {
-      return jsonResponse({ message: "Evento ignorado (tipo desconhecido)." });
+    const supabase = getClient(req);
+    const integration = getIntegrationClient(req);
+
+    let appId: string | null = null;
+    let clientId: string | null = null;
+    let queueStatus = "pending";
+
+    if (companyExternalId) {
+      const mapping = await resolveCompanyMapping(supabase, provider, companyExternalId);
+      if (mapping) {
+        appId = mapping.app_id;
+        clientId = mapping.client_id;
+
+        const { data: cred } = await integration
+          .from("credentials")
+          .select("client_secret")
+          .eq("app_id", appId)
+          .maybeSingle();
+
+        const clientSecret = cred?.client_secret;
+        if (!clientSecret) {
+          return jsonResponse({ error: "Credenciais não configuradas para a aplicação." }, 401);
+        }
+
+        const valid = await adapter.verifyWebhookSignature(rawBody, headers, clientSecret);
+        if (!valid) {
+          await createAuditLog(
+            supabase,
+            "webhook.signature_invalid",
+            appId,
+            provider,
+            { companyExternalId, eventType },
+            { category: "queues" },
+          );
+          return jsonResponse({ error: "Assinatura inválida." }, 401);
+        }
+      } else {
+        queueStatus = "unmapped";
+        await createAuditLog(
+          supabase,
+          "webhook.unmapped_company",
+          null,
+          provider,
+          { companyExternalId, eventType },
+          { category: "queues" },
+        );
+      }
+    } else {
+      queueStatus = "unmapped";
+      await createAuditLog(
+        supabase,
+        "webhook.missing_company_id",
+        null,
+        provider,
+        { eventType },
+        { category: "queues" },
+      );
     }
 
-    const supabase = getIntegrationClient(req);
+    const queueId = await enqueueWebhookInvoice(supabase, {
+      appId,
+      clientId,
+      provider,
+      companyExternalId,
+      eventType,
+      idempotencyKey,
+      payload,
+      headers,
+      status: queueStatus,
+    });
 
-    const { data: app, error: appError } = await supabase
-      .from("client_applications")
-      .select("client_id, status")
-      .eq("id", appId)
-      .single();
-
-    if (appError || !app) {
-      return jsonResponse({ error: "Aplicação não encontrada." }, 404);
-    }
-
-    const invoiceId = await upsertInvoice(supabase, app.client_id, appId, order);
-
-    for (const item of order.items) {
-      await upsertProduct(supabase, app.client_id, appId, item);
-    }
-
-    await upsertInvoiceItems(supabase, invoiceId, order.items);
-
-    if (order.carrierExternalId && order.carrierName) {
-      await upsertDictionary(supabase, appId, "carrier", [{
-        externalId: order.carrierExternalId,
-        name: order.carrierName,
-        extra: { carrierType: order.freightPaidBy },
-      }]);
-    }
-    if (order.marketplaceId && order.marketplaceName) {
-      await upsertDictionary(supabase, appId, "marketplace", [{
-        externalId: order.marketplaceId,
-        name: order.marketplaceName,
-      }]);
-    }
-    if (order.erpStatusCode) {
-      await upsertDictionary(supabase, appId, "status", [{
-        externalId: order.erpStatusCode,
-        name: order.erpStatusLabel || order.erpStatusCode,
-        extra: { globalStatus: order.globalStatus },
-      }]);
-    }
-
+    const elapsedMs = Date.now() - startedAt;
     return jsonResponse({
       success: true,
-      eventType,
-      invoiceId,
-      itemsCount: order.items?.length || 0,
+      queued: true,
+      queueId,
+      duplicate: queueId === null,
+      status: queueStatus,
+      elapsedMs,
     });
   } catch (error: any) {
+    console.error("[erp-webhook] Erro na ingestão:", error);
     return jsonResponse(
-      { error: error.message || "Erro ao processar webhook." },
-      500
+      { error: error.message || "Erro ao enfileirar webhook." },
+      500,
     );
   }
 });

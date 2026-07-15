@@ -1,9 +1,18 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
   getIntegrationClient, enqueueRetry,
-  upsertInvoice, upsertInvoiceItems, upsertProduct, upsertDictionary,
+  upsertInvoice, upsertInvoiceItems, upsertProduct,
+  loadAppDictionary, isDictionaryStale, syncAppDictionaries,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
+
+function orderNeedsDetailFetch(order: { items?: unknown[]; rawPayload?: Record<string, unknown> }): boolean {
+  const raw = order.rawPayload;
+  if (!raw || typeof raw !== "object") return true;
+  if (!raw.transporte && (raw.numeroLoja || raw.loja)) return true;
+  if ((order.items?.length ?? 0) === 0) return true;
+  return false;
+}
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -37,20 +46,29 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Aplicação não está ativa." }, 400);
     }
 
-    const adapter = getAdapter(app.erp_providers?.name || "");
+    const providerName = app.erp_providers?.name || "";
+    const adapter = getAdapter(providerName);
     const accessToken = app.tokens?.access_token;
     if (!accessToken) {
       return jsonResponse({ error: "Nenhum token de acesso encontrado." }, 400);
     }
 
+    if (await isDictionaryStale(supabase, appId)) {
+      const sales = supabase.schema("sales");
+      const { data: existingServices } = await sales
+        .from("erp_shipping_services")
+        .select("service_external_id")
+        .eq("app_id", appId);
+      const knownServiceIds = new Set((existingServices || []).map((s: any) => s.service_external_id));
+      await syncAppDictionaries(supabase, appId, providerName, accessToken, knownServiceIds);
+    }
+
+    const appDict = await loadAppDictionary(supabase, appId, providerName);
+
     let synced = 0;
     let errors = 0;
     let page = 1;
     let hasMore = true;
-
-    const discoveredCarriers = new Map<string, { name: string; carrierType?: string }>();
-    const discoveredMarketplaces = new Map<string, { name: string }>();
-    const discoveredStatuses = new Map<string, { label: string; global: string }>();
 
     while (hasMore) {
       try {
@@ -63,38 +81,19 @@ Deno.serve(async (req) => {
         for (const order of result.orders) {
           try {
             let fullOrder = order;
-            if (adapter.fetchOrderById && order.items.length === 0 && order.externalId) {
+            if (adapter.fetchOrderById && order.externalId && orderNeedsDetailFetch(order)) {
               try {
                 fullOrder = await adapter.fetchOrderById(accessToken, order.externalId);
               } catch (err: any) {
-                console.error(
-                  `Erro ao buscar detalhes do pedido ${order.externalId}: ${err.message}`
-                );
+                console.error(`Erro ao buscar detalhes do pedido ${order.externalId}: ${err.message}`);
               }
             }
 
-            const invoiceId = await upsertInvoice(supabase, app.client_id, appId, fullOrder);
+            const invoiceId = await upsertInvoice(supabase, app.client_id, appId, fullOrder, appDict);
             for (const item of fullOrder.items) {
               await upsertProduct(supabase, app.client_id, appId, item);
             }
             await upsertInvoiceItems(supabase, invoiceId, fullOrder.items);
-
-            if (fullOrder.marketplaceId && fullOrder.marketplaceName) {
-              discoveredMarketplaces.set(fullOrder.marketplaceId, { name: fullOrder.marketplaceName });
-            }
-            if (fullOrder.carrierExternalId && fullOrder.carrierName) {
-              discoveredCarriers.set(fullOrder.carrierExternalId, {
-                name: fullOrder.carrierName,
-                carrierType: fullOrder.freightPaidBy,
-              });
-            }
-            if (fullOrder.erpStatusCode) {
-              discoveredStatuses.set(fullOrder.erpStatusCode, {
-                label: fullOrder.erpStatusLabel || fullOrder.erpStatusCode,
-                global: fullOrder.globalStatus,
-              });
-            }
-
             synced++;
           } catch (err: any) {
             errors++;
@@ -116,43 +115,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (discoveredCarriers.size > 0) {
-      await upsertDictionary(supabase, appId, "carrier",
-        Array.from(discoveredCarriers.entries()).map(([id, v]) => ({
-          externalId: id,
-          name: v.name,
-          extra: { carrierType: v.carrierType },
-        }))
-      );
-    }
-    if (discoveredMarketplaces.size > 0) {
-      await upsertDictionary(supabase, appId, "marketplace",
-        Array.from(discoveredMarketplaces.entries()).map(([id, v]) => ({
-          externalId: id,
-          name: v.name,
-        }))
-      );
-    }
-    if (discoveredStatuses.size > 0) {
-      await upsertDictionary(supabase, appId, "status",
-        Array.from(discoveredStatuses.entries()).map(([code, v]) => ({
-          externalId: code,
-          name: v.label,
-          extra: { globalStatus: v.global },
-        }))
-      );
-    }
-
     return jsonResponse({
       success: true,
       message: `Sincronização concluída. ${synced} pedidos, ${errors} erros.`,
       syncedOrders: synced,
       errors,
-      dictionaries: {
-        carriers: discoveredCarriers.size,
-        marketplaces: discoveredMarketplaces.size,
-        statuses: discoveredStatuses.size,
-      },
     });
   } catch (error: any) {
     return jsonResponse({ error: error.message || "Erro ao sincronizar dados." }, 500);

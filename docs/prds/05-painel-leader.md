@@ -17,24 +17,34 @@ Painel para líderes da agência. Acesso a usuários com papel `leader`. Visão 
 | Total de clientes ativos | `core.clients WHERE status = 'active'` |
 | Total de pedidos no mês | `sales.invoices` |
 | Ticket médio | `total_approved / approved_invoices` |
-| Comparativo mês anterior | Cálculo no frontend |
+| Comparativo mês anterior | `PeriodComparison` em cada KPI (% ou Δ absoluto) |
 
 **Gráfico:**
 - Faturamento diário (últimos 30 dias) — `sales.daily_billing`
 - Faturamento mensal por cliente — `sales.client_monthly_billing`
 
-### 2. Ranking de Clientes
+### 2. Rankings (clientes, marketplaces, e-commerce)
 
-**Top clientes por faturamento.**
+Grid de 3 colunas no dashboard. Detalhes em [PRD 11](./11-dashboard-traducoes-jul2026.md).
+
+| Card | View | Indicador de posição |
+|---|---|---|
+| Clientes | `sales.client_monthly_ranking` | ↑↓ à esquerda da posição (`prev_rank`) |
+| Marketplaces | `sales.marketplace_monthly_ranking` | Exclui lojas próprias |
+| E-commerce | `sales.ecommerce_monthly_ranking` | Shopify, Nuvemshop, WooCommerce |
+
+**Ranking de clientes — colunas:**
 
 | Coluna | Descrição |
 |---|---|
-| Posição | Ordenação por faturamento |
-| Cliente | Nome |
+| Posição + tendência | Ordem no mês + seta vs mês anterior |
+| Cliente | Nome (link para detalhe) |
+| Pedidos | Quantidade no mês |
 | Faturamento mês | Valor aprovado no mês |
-| Faturamento total | Valor aprovado total |
-| Pedidos | Quantidade de pedidos aprovados |
-| Última atualização | Data da última sincronização |
+
+### 2.1 Tipo de loja
+
+Card `ChannelRankingCard`: marketplace vs e-commerce com barra proporcional e tendência mês a mês.
 
 ### 3. Carteira de Clientes
 
@@ -85,9 +95,12 @@ Painel para líderes da agência. Acesso a usuários com papel `leader`. Visão 
 
 | View | Frequência |
 |---|---|
-| `sales.client_monthly_billing` | Ao carregar dashboard |
-| `sales.daily_billing` | Ao carregar dashboard |
-| `sales.product_ranking` | Ao acessar rankings |
+| `sales.client_monthly_billing` | KPIs e agregações |
+| `sales.daily_billing` | Gráficos (quando habilitado) |
+| `sales.client_monthly_ranking` | Ranking clientes |
+| `sales.marketplace_monthly_ranking` | Ranking marketplaces |
+| `sales.ecommerce_monthly_ranking` | Ranking e-commerce |
+| `sales.channel_monthly_revenue` | Card tipo de loja |
 
 ## Permissões RLS
 

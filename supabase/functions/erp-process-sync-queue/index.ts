@@ -1,7 +1,8 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
 import {
   getClient,
-  upsertInvoice, upsertInvoiceItems, upsertProduct, upsertDictionary,
+  upsertInvoice, upsertInvoiceItems, upsertProduct,
+  loadAppDictionary, isDictionaryStale, syncAppDictionaries,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
 
@@ -79,16 +80,27 @@ Deno.serve(async (req) => {
         const providerName = app.erp_providers?.name || "unknown";
         console.log(`[erp-process-sync-queue] App ${item.app_id}: provider=${providerName}, client_id=${app.client_id}`);
 
+        if (await isDictionaryStale(supabase, item.app_id)) {
+          const sales = supabase.schema("sales");
+          const { data: existingServices } = await sales
+            .from("erp_shipping_services")
+            .select("service_external_id")
+            .eq("app_id", item.app_id);
+          const knownServiceIds = new Set((existingServices || []).map((s: any) => s.service_external_id));
+          try {
+            await syncAppDictionaries(supabase, item.app_id, providerName, accessToken, knownServiceIds);
+          } catch (dictErr: any) {
+            console.error(`[erp-process-sync-queue] Erro sync fria dicionários: ${dictErr.message}`);
+          }
+        }
+
+        const appDict = await loadAppDictionary(supabase, item.app_id, providerName);
+
         let synced = 0;
         let errors = 0;
-        let page = 1;
-
+        const page = 1;
         const fromDate = dateNDaysAgo(1);
         console.log(`[erp-process-sync-queue] Buscando pedidos desde ${fromDate} para app ${item.app_id}`);
-
-        const discoveredCarriers = new Map<string, { name: string; carrierType?: string }>();
-        const discoveredMarketplaces = new Map<string, { name: string }>();
-        const discoveredStatuses = new Map<string, { label: string; global: string }>();
 
         const sales = supabase.schema("sales");
         try {
@@ -116,97 +128,31 @@ Deno.serve(async (req) => {
                 synced++;
                 continue;
               }
-              let fullOrder = order;
-              if (adapter.fetchOrderById && order.items.length === 0 && order.externalId) {
-                try {
-                  fullOrder = await adapter.fetchOrderById(accessToken, order.externalId);
-                } catch (err: any) {
-                  console.log(`[erp-process-sync-queue] fetchOrderById falhou para ${order.externalId}: ${err.message}`);
-                }
-              }
 
-              const invoiceId = await upsertInvoice(sales, app.client_id, item.app_id, fullOrder);
-              for (const it of fullOrder.items) {
+              const invoiceId = await upsertInvoice(supabase, app.client_id, item.app_id, order, appDict);
+              for (const it of order.items) {
                 await upsertProduct(supabase, app.client_id, item.app_id, it);
               }
-              await upsertInvoiceItems(sales, invoiceId, fullOrder.items);
-
-              if (fullOrder.marketplaceId && fullOrder.marketplaceName) {
-                discoveredMarketplaces.set(fullOrder.marketplaceId, { name: fullOrder.marketplaceName });
-              }
-              if (fullOrder.carrierExternalId && fullOrder.carrierName) {
-                discoveredCarriers.set(fullOrder.carrierExternalId, { name: fullOrder.carrierName, carrierType: fullOrder.freightPaidBy });
-              }
-              if (fullOrder.erpStatusCode) {
-                discoveredStatuses.set(fullOrder.erpStatusCode, { label: fullOrder.erpStatusLabel || fullOrder.erpStatusCode, global: fullOrder.globalStatus });
-              }
+              await upsertInvoiceItems(supabase, invoiceId, order.items);
               synced++;
             } catch (err: any) {
               errors++;
               console.error(`[erp-process-sync-queue] Erro ao salvar pedido ${order.externalId}: ${err.message}`);
             }
           }
-      } catch (err: any) {
-        errors++;
-        console.error(`[erp-process-sync-queue] Erro na página ${page} para app ${item.app_id}: ${err.message}`);
-        if (err.stack) console.error(`[erp-process-sync-queue] Stack: ${err.stack}`);
-      }
+        } catch (err: any) {
+          errors++;
+          console.error(`[erp-process-sync-queue] Erro na página ${page} para app ${item.app_id}: ${err.message}`);
+          if (err.stack) console.error(`[erp-process-sync-queue] Stack: ${err.stack}`);
+        }
 
         console.log(`[erp-process-sync-queue] App ${item.app_id}: ${synced} sincronizados, ${errors} erros`);
-
-        try {
-          if (adapter.fetchDictionaries) {
-            const dicts = await adapter.fetchDictionaries(accessToken, item.app_id);
-            const sales = supabase.schema("sales");
-            if (dicts.carriers.length > 0) {
-              await upsertDictionary(sales, item.app_id, "carrier",
-                dicts.carriers.map((c: any) => ({ externalId: c.externalId, name: c.name, extra: { carrierType: c.carrierType, services: c.services } }))
-              );
-              console.log(`[erp-process-sync-queue] Dicionário carriers: ${dicts.carriers.length} registros`);
-            }
-            if (dicts.marketplaces.length > 0) {
-              await upsertDictionary(sales, item.app_id, "marketplace",
-                dicts.marketplaces.map((m: any) => ({ externalId: m.externalId, name: m.name }))
-              );
-              console.log(`[erp-process-sync-queue] Dicionário marketplaces: ${dicts.marketplaces.length} registros`);
-            }
-            if (dicts.statuses.length > 0) {
-              await upsertDictionary(sales, item.app_id, "status",
-                dicts.statuses.map((s: any) => ({ externalId: s.erpStatusCode, name: s.erpStatusLabel, extra: { globalStatus: s.globalStatus } }))
-              );
-              console.log(`[erp-process-sync-queue] Dicionário statuses: ${dicts.statuses.length} registros`);
-            }
-          }
-        } catch (dictErr: any) {
-          console.error(`[erp-process-sync-queue] Erro ao buscar dicionários para app ${item.app_id}: ${dictErr.message}`);
-        }
-
-        if (discoveredCarriers.size > 0) {
-          const sales = supabase.schema("sales");
-          await upsertDictionary(sales, item.app_id, "carrier",
-            Array.from(discoveredCarriers.entries()).map(([id, v]) => ({ externalId: id, name: v.name, extra: { carrierType: v.carrierType } }))
-          );
-        }
-        if (discoveredMarketplaces.size > 0) {
-          const sales = supabase.schema("sales");
-          await upsertDictionary(sales, item.app_id, "marketplace",
-            Array.from(discoveredMarketplaces.entries()).map(([id, v]) => ({ externalId: id, name: v.name }))
-          );
-        }
-        if (discoveredStatuses.size > 0) {
-          const sales = supabase.schema("sales");
-          await upsertDictionary(sales, item.app_id, "status",
-            Array.from(discoveredStatuses.entries()).map(([code, v]) => ({ externalId: code, name: v.label, extra: { globalStatus: v.global } }))
-          );
-        }
 
         await supabase.rpc("complete_sync", { p_id: item.id, p_status: "completed" });
         console.log(`[erp-process-sync-queue] Item ${item.id} concluído com sucesso`);
         results.push({ id: item.id, app_id: item.app_id, status: "completed", synced, errors });
       } catch (err: any) {
         console.error(`[erp-process-sync-queue] Erro fatal no item ${item.id}: ${err.message}`);
-        await supabase.rpc("complete_sync", { p_id: item.id, p_status: "failed", p_error: err.message });
-        console.error(`[erp-process-sync-queue] Stack do erro fatal no item ${item.id}:`, err.stack);
         await supabase.rpc("complete_sync", { p_id: item.id, p_status: "failed", p_error: err.message });
         results.push({ id: item.id, app_id: item.app_id, status: "failed", error: err.message });
       }

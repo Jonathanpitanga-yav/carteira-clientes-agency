@@ -3,8 +3,9 @@ import { createClient, createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 import { humanError } from "@/lib/utils/errors"
 import { toast } from "sonner"
+import { getSupabaseEnv } from "@/lib/env"
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_URL = getSupabaseEnv().url
 
 function getIntegration() {
   return createSchemaClient("integration")

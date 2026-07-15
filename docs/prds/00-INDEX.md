@@ -1,8 +1,8 @@
 # PRD — Seller Wallet
 
 > Sistema de Gestão de Carteira de Clientes para Agências
-> **Versão:** 1.4.0  
-> **Última atualização:** 2026-07-14
+> **Versão:** 1.5.0  
+> **Última atualização:** 2026-07-18
 
 ---
 
@@ -20,3 +20,4 @@
 | 08 | [Fluxos ERP](./08-fluxos-erp.md) | OAuth, webhook, sincronização manual |
 | 09 | [Infraestrutura](./09-infra-cron-queues.md) | Cron jobs, filas de retry, deploy |
 | 10 | [Frontend Web](./10-frontend-web.md) | Next.js, rotas, componentes, hooks, tema |
+| 11 | [Dashboard e traduções (Jul/2026)](./11-dashboard-traducoes-jul2026.md) | KPIs com tendência, rankings, canal/logística, OAuth |

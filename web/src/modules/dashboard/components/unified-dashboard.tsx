@@ -3,13 +3,13 @@
 import type { Role } from "@/lib/constants"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
-import { StatCard } from "@/components/shared/stat-card"
 import { BillingOverview } from "@/modules/leader/components/billing-overview"
 import { ClientRanking } from "@/modules/leader/components/client-ranking"
+import { MarketplaceRankingCard } from "@/modules/dashboard/components/marketplace-ranking-card"
+import { EcommerceRankingCard } from "@/modules/dashboard/components/ecommerce-ranking-card"
+import { ChannelRankingCard } from "@/modules/dashboard/components/channel-ranking-card"
 import { PortfolioStats } from "@/modules/analyst/components/portfolio-stats"
 import { AccountSummary } from "@/modules/client/components/account-summary"
-import { useUsersStats } from "@/hooks/use-users"
-import { Users } from "lucide-react"
 
 type Props = {
   roles: Role[]
@@ -32,9 +32,15 @@ export function UnifiedDashboard({ roles }: Props) {
           title="Dashboard"
           description="Visão consolidada da agência"
         />
-        <BillingOverview />
-        {isAdmin && <AdminCards />}
-        <ClientRanking />
+        <div className="space-y-6">
+          <BillingOverview showUsersStat={isAdmin} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <ClientRanking />
+            <MarketplaceRankingCard />
+            <EcommerceRankingCard />
+          </div>
+          <ChannelRankingCard />
+        </div>
       </PageContainer>
     )
   }
@@ -64,19 +70,4 @@ export function UnifiedDashboard({ roles }: Props) {
   }
 
   return null
-}
-
-function AdminCards() {
-  const { data: userStats, isLoading } = useUsersStats()
-
-  return (
-    <div className="grid gap-4 md:grid-cols-4">
-      <StatCard
-        label="Usuários cadastrados"
-        value={userStats?.total ?? 0}
-        icon={<Users className="h-4 w-4" />}
-        loading={isLoading}
-      />
-    </div>
-  )
 }

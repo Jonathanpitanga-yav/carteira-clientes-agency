@@ -37,10 +37,10 @@
 **Níveis de zoom:**
 | Papel | O que vê |
 |---|---|
-| Admin | `BillingOverview` (4 cards) + ranking clientes + total de usuários |
-| Leader | `BillingOverview` (4 cards) + ranking clientes |
-| Analyst | `PortfolioStats` (4 cards filtrados pela carteira) |
-| Client | `AccountSummary` (4 cards com dados próprios + variação) |
+| Admin | `BillingOverview` (KPIs + clientes ativos + usuários) + 3 rankings + tipo de loja |
+| Leader | `BillingOverview` (KPIs + clientes ativos) + 3 rankings + tipo de loja |
+| Analyst | `PortfolioStats` (carteira + KPIs + 3 rankings + tipo de loja) |
+| Client | `AccountSummary` (KPIs próprios + variação) |
 
 Rotas antigas (`/admin`, `/leader`, `/analyst`, `/client`) redirecionam para `/`.
 

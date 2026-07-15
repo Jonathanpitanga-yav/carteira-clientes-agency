@@ -55,28 +55,51 @@ sequenceDiagram
 | Token exchange | ERP retorna erro | 302 → `?erp_callback=error&message=Token+exchange+failed&details=X` + loga erro |
 | Token exchange | Parse de resposta inválida | 302 → `?erp_callback=error&message=Invalid+token+response` + loga erro |
 
-## Fluxo Webhook
+## Fluxo Webhook (two-stage: ingestão + processamento)
 
 ```mermaid
 sequenceDiagram
   participant ERP as ERP Provider
-  participant EF as Edge Function
-  participant DB as Supabase DB
+  participant Ingest as erp-webhook
+  participant DB as PostgreSQL
+  participant Cron as pg_cron
+  participant Worker as erp-process-webhook-queue
 
-  ERP->>EF: POST /erp-webhook (x-erp-provider, x-app-id)
-  EF->>EF: adapter.handleWebhook(payload, headers)
-  EF->>DB: upsertInvoice() (18+ campos: frete, comissão, marketplace, etc)
-  EF->>DB: upsertInvoiceItems() (com sku)
-  EF->>DB: upsertProduct()
-  EF->>DB: upsertDictionary() (lazy: carrier, marketplace, status)
-  EF-->>ERP: { success, eventType, invoiceId, itemsCount }
+  ERP->>Ingest: POST /erp-webhook (JSON bruto, URL única)
+  Ingest->>Ingest: extractCompanyId + resolveApp (erp_company_mappings)
+  Ingest->>Ingest: verifyWebhookSignature (HMAC Bling)
+  Ingest->>DB: INSERT jobs.webhook_invoices_queue (pending)
+  Ingest-->>ERP: HTTP 200 (<500ms)
+
+  Cron->>Worker: trigger_process_webhook_queue (1 min)
+  Worker->>DB: acquire_pending_webhook_invoices (SKIP LOCKED)
+  Worker->>Worker: handleWebhook + upsertInvoice
+  Worker->>DB: complete_webhook_invoice (processed/failed)
 ```
+
+### Resolução de tenant (URL única)
+
+- Todos os clientes usam a mesma URL: `https://{project}.supabase.co/functions/v1/erp-webhook`
+- O `companyId` do payload (Bling) é mapeado para `app_id` via `integration.erp_company_mappings`
+- O mapping é criado automaticamente no OAuth (`erp-callback` → `fetchCompanyProfile`)
+- Webhooks sem mapping são enfileirados com status `unmapped` e reprocessados após OAuth
+
+### Caminho frio vs quente (dictionary-first)
+
+| Caminho | Função | Chamadas API ERP |
+|---|---|---|
+| Frio | `erp-fetch-dictionaries`, pós-OAuth em `erp-callback` | Batch: Bling logisticas+servicos; Tiny formas-envio paginado |
+| Quente | `erp-sync-data`, `erp-process-sync-queue`, `erp-process-webhook-queue` | Tradução 100% via dicionário no banco (sync fria opcional se stale) |
+
+Sync de dicionário só roda se `dictionary_sync_state` expirou (TTL 7 dias). Pedidos usam `loadAppDictionary` + `resolveOrderTranslations` sem `fetchOrderById`.
 
 ### Regras
 
-- Webhooks não autenticados — cada provedor tem assinatura própria (verificar no adapter)
-- Timeout na edge function: 300s (max Supabase)
-- Em caso de erro: `enqueueRetry('erp_webhook_retry')` + log `queue.enqueued`
+- **Assinatura:** Bling valida `X-Bling-Signature-256` (HMAC-SHA256 do raw body com `client_secret`)
+- **Idempotência:** `UNIQUE(provider, idempotency_key)` — duplicatas retornam 200 sem reprocessar
+- **Ingestão:** responde 200 em <500ms; falha de DB retorna 500 (ERP reenvia)
+- **Processamento:** worker cadenciado (1 webhook por `app_id` por ciclo) com backoff exponencial
+- **Retry:** até 5 tentativas → `dead_letter`; recovery de jobs presos após 10 min
 
 ## Fluxo Sincronização Manual
 
@@ -94,12 +117,11 @@ sequenceDiagram
   EF->>ERP: adapter.fetchOrders(accessToken, params)
   loop Paginação
     ERP-->>EF: Página de pedidos
-    EF->>EF: Se items vazios → fetchOrderById (enriquecimento)
-    EF->>DB: upsertInvoice() + upsertInvoiceItems() + upsertProduct()
-    EF->>EF: Acumula carriers, marketplaces, status em Map
+    EF->>DB: loadAppDictionary (1x por app)
+    EF->>DB: upsertInvoice() + resolveOrderTranslations
+    EF->>DB: upsertInvoiceItems() + upsertProduct()
   end
-  EF->>DB: upsertDictionary() (lote: carriers, marketplaces, statusMappings)
-  EF-->>FE: { syncedOrders, errors, dictionaries }
+  EF-->>FE: { syncedOrders, errors }
   FE-->>User: Toast de sucesso com resumo
 ```
 

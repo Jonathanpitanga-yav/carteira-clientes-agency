@@ -15,7 +15,9 @@ export interface ERPOrder {
   marketplaceId?: string;
   marketplaceName?: string;
   marketplaceOrderId?: string;
+  marketplaceChannel?: string;
   orderType?: 'marketplace' | 'store';
+  orderOrigin?: string;
   salesChannel?: string;
   freightValue: number;
   freightPaidBy?: string;
@@ -28,9 +30,16 @@ export interface ERPOrder {
   trackingUrl?: string;
   shippingMethod?: string;
   shippingMethodExternalId?: string;
+  logisticsIntegrationType?: string;
+  shippingServiceExternalId?: string;
+  shippingServiceName?: string;
+  shippingServiceAliases?: string[];
   erpStatusCode: string;
   erpStatusLabel?: string;
   globalStatus: string;
+  globalMarketplaceSlug?: string;
+  globalLogisticsSlug?: string;
+  globalOrderTypeSlug?: string;
   items: ERPOrderItem[];
   notes?: string;
   rawPayload: any;
@@ -77,15 +86,39 @@ export interface IERPAdapter {
 
   fetchDictionaries?(
     accessToken: string,
-    appId: string
+    appId: string,
+    options?: { knownServiceIds?: Set<string> }
   ): Promise<{
     carriers: { externalId: string; name: string; carrierType?: string; services?: unknown[] }[];
-    marketplaces: { externalId: string; name: string }[];
+    marketplaces: { externalId: string; name: string; canalVenda?: string }[];
     statuses: { erpStatusCode: string; erpStatusLabel: string; globalStatus: string }[];
+    shippingServices?: {
+      externalId: string;
+      name: string;
+      logisticsExternalId?: string;
+      aliases?: string[];
+      providerLogisticsType?: string;
+    }[];
   }>;
 
   handleWebhook(
     payload: any,
     headers: Record<string, string>
   ): Promise<{ eventType: string; data: ERPOrder }>;
+
+  extractCompanyId(payload: unknown): string | null;
+
+  verifyWebhookSignature(
+    rawBody: string,
+    headers: Record<string, string>,
+    clientSecret: string
+  ): Promise<boolean>;
+
+  supportedWebhookEvents(): string[];
+
+  buildIdempotencyKey(payload: unknown): string;
+
+  fetchCompanyProfile?(
+    accessToken: string
+  ): Promise<{ companyExternalId: string; companyName?: string }>;
 }

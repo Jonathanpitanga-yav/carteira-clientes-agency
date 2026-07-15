@@ -61,7 +61,35 @@ SELECT cron.schedule(
    - Se > 3: arquiva mensagem (`pgmq.archive()`)
 3. Se sucesso: deleta mensagem (`pgmq.delete()`)
 
-### `jobs.trigger_webhook_retry()`
+### `jobs.trigger_process_webhook_queue()`
+
+```
+SELECT cron.schedule(
+  'process-webhook-queue',
+  '* * * * *',
+  $$SELECT jobs.trigger_process_webhook_queue()$$
+);
+```
+
+**Função:**
+1. Dispara `erp-process-webhook-queue` via `pg_net.http_post()`
+2. Worker adquire até 20 itens com `SKIP LOCKED` (máx. 1 por `app_id`)
+3. Processa webhooks: `handleWebhook` → `upsertInvoice` → `complete_webhook_invoice`
+4. Retry com backoff exponencial (até 5 tentativas → `dead_letter`)
+
+### `jobs.recover_stuck_webhook_invoices()`
+
+```
+SELECT cron.schedule(
+  'recover-stuck-webhooks',
+  '*/10 * * * *',
+  $$SELECT jobs.recover_stuck_webhook_invoices()$$
+);
+```
+
+Reseta itens em `processing` há mais de 10 minutos para `pending`.
+
+### `jobs.trigger_webhook_retry()` (legado pgmq)
 
 ```
 SELECT cron.schedule(
@@ -71,7 +99,7 @@ SELECT cron.schedule(
 );
 ```
 
-Idêntico ao acima mas lê da fila `erp_webhook_retry`.
+Fila pgmq legada. O processamento principal usa `jobs.webhook_invoices_queue` com retry nativo.
 
 ## Helper Functions
 
@@ -104,8 +132,23 @@ Idêntico ao acima mas lê da fila `erp_webhook_retry`.
 
 ## Estrutura de Filas
 
+### Fila Postgres: `jobs.webhook_invoices_queue`
+
+| Status | Descrição |
+|---|---|
+| `pending` | Aguardando processamento |
+| `processing` | Adquirido pelo worker (SKIP LOCKED) |
+| `processed` | Pedido persistido em `sales.invoices` |
+| `failed` | Falha transitória (retry com backoff) |
+| `dead_letter` | Esgotou max_retries (5) |
+| `unmapped` | `companyId` sem mapping (reprocessado após OAuth) |
+
+**Cron:** `process-webhook-queue` (1 min) + `recover-stuck-webhooks` (10 min)
+
+### Filas pgmq (retry legado)
+
 | Fila pgmq | Finalidade | Max Retry | Cron |
 |---|---|---|---|
 | `erp_token_retry` | Retry de refresh de token expirado | 3 | A cada 5 min |
-| `erp_webhook_retry` | Retry de processamento de webhook | 3 | A cada 5 min |
+| `erp_webhook_retry` | Retry legado (substituído por webhook_invoices_queue) | 3 | — |
 | `erp_sync_retry` | Retry de sync manual | 3 | A cada 5 min |

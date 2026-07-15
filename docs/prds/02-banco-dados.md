@@ -246,7 +246,35 @@ Catálogo universal de status de pedido, normalizado entre ERPs.
 | `color` | TEXT | Cor hexadecimal para UI |
 | `sort_order` | INTEGER | Ordem de exibição |
 
-Seed: 10 status universais (draft, pending, approved, in_production, invoiced, shipped, delivered, canceled, refunded, unknown).
+Seed: 10 status universais (draft, pending, approved, in_production, invoiced, shipped, delivered, canceled, returned, refunded).
+
+### `sales.global_marketplaces`
+Catálogo universal de marketplaces (slug estável entre ERPs).
+
+Colunas: `slug` PK, `label`, `sort_order`. Seeds: mercado_livre, magalu, shopee, amazon, etc.
+
+### `sales.global_logistics_services`
+Catálogo universal de logísticas/serviços de envio.
+
+Colunas: `slug` PK, `label`, `category` (marketplace_logistics | fulfillment | carrier | gateway | none), `parent_marketplace_slug` FK opcional.
+
+### `sales.global_order_types`
+Tipos universais de pedido: marketplace, ecommerce, physical_store, wholesale, manual, unknown.
+
+### `sales.erp_provider_mapping_rules`
+Regras de tradução por provider (bling/tiny): status, logistics, marketplace, order_type via `enum_code` ou `name_pattern`.
+
+### `sales.erp_shipping_services`
+Serviços de envio por app (Bling servicos, Tiny formasFrete). Lookup por `(app_id, service_external_id)` no hot path — evita chamadas API por pedido.
+
+### `integration.dictionary_sync_state`
+TTL do sync frio de dicionários: `last_synced_at`, `ttl_days` (default 7), `sync_status`.
+
+### Colunas globais em `sales.invoices`
+- `global_marketplace_slug`, `global_logistics_slug`, `global_order_type_slug`
+- `erp_marketplace_external_id` (ID externo ERP)
+- `marketplace_id` UUID FK → erp_marketplaces
+- `erp_logistics_external_id`, `erp_logistics_name`
 
 ### `sales.erp_status_mappings`
 Mapeamento entre status de cada ERP e o status universal.

@@ -12,6 +12,10 @@ const CONFIGS: Record<string, RateLimitConfig> = {
 const requestTimestamps: Record<string, number[]> = {};
 const tokenRequestTimestamps: Record<string, number[]> = {};
 
+export function rateLimitKey(provider: string, appId?: string): string {
+  return appId ? `${provider.toLowerCase()}:${appId}` : provider.toLowerCase();
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -53,20 +57,22 @@ export async function throttledFetch(
   url: string,
   options: RequestInit,
   provider: string,
-  isTokenEndpoint = false
+  isTokenEndpoint = false,
+  appId?: string,
 ): Promise<Response> {
+  const key = rateLimitKey(provider, isTokenEndpoint ? undefined : appId);
   const config = CONFIGS[provider.toLowerCase()] || { maxRequestsPerSecond: 1 };
 
   if (isTokenEndpoint && config.tokenEndpointMaxPerMinute) {
-    tokenRequestTimestamps[provider] = await enforceRateLimit(
-      tokenRequestTimestamps[provider] || [],
+    tokenRequestTimestamps[key] = await enforceRateLimit(
+      tokenRequestTimestamps[key] || [],
       config.tokenEndpointMaxPerMinute,
       60000
     );
   }
 
-  requestTimestamps[provider] = await enforceRateLimit(
-    requestTimestamps[provider] || [],
+  requestTimestamps[key] = await enforceRateLimit(
+    requestTimestamps[key] || [],
     config.maxRequestsPerSecond,
     1000
   );

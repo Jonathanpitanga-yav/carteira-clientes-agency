@@ -1,5 +1,5 @@
 import { getAdapter } from "../shared/adapters/registry.ts";
-import { getIntegrationClient, getAppCredentials, saveTokens, createAuditLog, handleCors, jsonResponse } from "../shared/db.ts";
+import { getClient, getIntegrationClient, getAppCredentials, saveTokens, createAuditLog, syncAppDictionaries, upsertCompanyMapping, handleCors, jsonResponse } from "../shared/db.ts";
 
 const APP_URL = Deno.env.get("APP_URL") || "https://web-7dfanuxjj-jonathanpitanga-yavs-projects.vercel.app";
 
@@ -30,6 +30,7 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const supabase = getIntegrationClient(req);
+  const rootClient = getClient(req);
   const audit = (event: string, appId: string | null, meta: Record<string, unknown> = {}) =>
     createAuditLog(supabase, `erp_callback.${event}`, appId, null, { ...meta, method: req.method, path: url.pathname }, { category: "credentials" });
 
@@ -164,6 +165,33 @@ Deno.serve(async (req) => {
 
     log("callback_success", { appId: app.id, provider: providerName });
     await audit("callback_success", app.id, { provider: providerName });
+
+    try {
+      await syncAppDictionaries(supabase, app.id, providerName, tokenResponse.accessToken, new Set());
+      log("callback_dictionary_synced", { appId: app.id });
+    } catch (dictErr: any) {
+      log("callback_dictionary_sync_failed", { appId: app.id, error: dictErr.message });
+    }
+
+    if (adapter.fetchCompanyProfile) {
+      try {
+        const profile = await adapter.fetchCompanyProfile(tokenResponse.accessToken);
+        await upsertCompanyMapping(
+          rootClient,
+          providerName,
+          profile.companyExternalId,
+          app.id,
+          app.client_id,
+          profile.companyName,
+        );
+        log("callback_company_mapped", {
+          appId: app.id,
+          companyExternalId: profile.companyExternalId,
+        });
+      } catch (mapErr: any) {
+        log("callback_company_mapping_failed", { appId: app.id, error: mapErr.message });
+      }
+    }
 
     return redirectSuccess(app.id);
   } catch (error: any) {

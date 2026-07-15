@@ -1,6 +1,6 @@
 "use client"
 
-import { type Invoice, getGlobalStatusDisplay } from "@/hooks/use-orders"
+import { type Invoice, getGlobalStatusDisplay, getGlobalMarketplaceDisplay, getGlobalLogisticsDisplay, getStoreTypeDisplay } from "@/hooks/use-orders"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -87,15 +87,15 @@ export function OrdersTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-auto rounded-md border max-h-[calc(100vh-320px)]">
+      <div className="overflow-auto rounded-md border max-h-[calc(100vh-260px)]">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               {showClient && <TableHead>Cliente</TableHead>}
               <TableHead>Pedido</TableHead>
               <TableHead>Data</TableHead>
-              <TableHead>Marketplace</TableHead>
               <TableHead>Canal</TableHead>
+              <TableHead>Tipo de loja</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Frete</TableHead>
               <TableHead>Status</TableHead>
@@ -104,25 +104,45 @@ export function OrdersTable({
           </TableHeader>
           <TableBody>
             {orders.map((order) => {
-              const statusDisplay = getGlobalStatusDisplay(order.global_status ?? order.status)
+              const statusDisplay = getGlobalStatusDisplay(order.global_status)
+              const erpStatusHint =
+                order.erp_status_label &&
+                order.erp_status_label.trim() !== statusDisplay.label
+                  ? order.erp_status_label
+                  : undefined
+              const marketplaceDisplay = getGlobalMarketplaceDisplay(
+                order.global_marketplace_slug !== "unknown"
+                  ? order.global_marketplace_slug
+                  : order.erp_marketplace_catalog_slug,
+                order.marketplace_name,
+                order.order_type,
+                order.erp_marketplace_name,
+              )
+              const logisticsDisplay = getGlobalLogisticsDisplay(
+                order.global_logistics_slug,
+                order.erp_logistics_name || order.shipping_method || order.carrier_name,
+                order.global_marketplace_slug !== "unknown"
+                  ? order.global_marketplace_slug
+                  : order.erp_marketplace_catalog_slug,
+              )
               return (
                 <TableRow key={order.id}>
                   {showClient && (
-                    <TableCell className="font-medium">{order.client_id?.slice(0, 8) ?? "—"}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {order.client_name ?? "—"}
+                    </TableCell>
                   )}
                   <TableCell className="font-mono text-sm">
-                    {order.erp_order_number ?? order.external_id ?? order.id.slice(0, 8)}
+                    {order.invoice_number ?? order.erp_order_number ?? order.external_id ?? order.id.slice(0, 8)}
                   </TableCell>
                   <TableCell className="text-muted-foreground whitespace-nowrap">
                     {order.issue_date ? formatDate(order.issue_date) : "—"}
                   </TableCell>
-                  <TableCell>{order.marketplace_name ?? "—"}</TableCell>
-                  <TableCell className="text-sm">
-                    {order.sales_channel ? (
-                      <Badge variant="outline" className="text-xs">{order.sales_channel}</Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">{order.order_type === "store" ? "Loja" : "—"}</span>
-                    )}
+                  <TableCell className="whitespace-nowrap">
+                    {marketplaceDisplay}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {getStoreTypeDisplay(order)}
                   </TableCell>
                   <TableCell className="text-right font-medium whitespace-nowrap">
                     {formatCurrency(order.total_amount ?? 0)}
@@ -133,10 +153,18 @@ export function OrdersTable({
                       : "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge className={`${statusDisplay.color} whitespace-nowrap`}>{statusDisplay.label}</Badge>
+                    <Badge
+                      className={`${statusDisplay.color} whitespace-nowrap`}
+                      title={erpStatusHint ? `ERP: ${erpStatusHint}` : undefined}
+                    >
+                      {statusDisplay.label}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-40 truncate" title={order.shipping_method ?? order.carrier_name ?? ""}>
-                    {order.carrier_name || order.shipping_method || "—"}
+                  <TableCell
+                    className="text-sm text-muted-foreground max-w-48 truncate"
+                    title={logisticsDisplay}
+                  >
+                    {logisticsDisplay}
                   </TableCell>
                 </TableRow>
               )

@@ -1,13 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr"
+import { getSupabaseEnv } from "@/lib/env"
 
 let _client: ReturnType<typeof createBrowserClient> | null = null
 
 function getClient() {
   if (!_client) {
-    _client = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
+    const { url, anonKey } = getSupabaseEnv()
+    _client = createBrowserClient(url, anonKey)
   }
   return _client
 }
