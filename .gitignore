@@ -35,3 +35,7 @@ Thumbs.db
 
 # Temp scripts
 seed-admin.*
+scripts/_*.json
+scripts/_tmp-*.js
+scripts/write-tokens.js
+.deploy-payloads/_mcp-deploy-results.json
