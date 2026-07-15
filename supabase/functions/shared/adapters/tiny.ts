@@ -375,7 +375,7 @@ export class TinyAdapter implements IERPAdapter {
     accessToken: string,
   ): Promise<{ companyExternalId: string; companyName?: string }> {
     const response = await throttledFetch(
-      `${this.baseUrl}/empresa`,
+      `${this.baseUrl}/info`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
       this.provider,
     );
@@ -384,10 +384,9 @@ export class TinyAdapter implements IERPAdapter {
       throw new Error(`Falha ao buscar dados da empresa Tiny: HTTP ${response.status}`);
     }
 
-    const body = await response.json();
-    const company = body.data || body.empresa || body;
+    const company = await response.json();
     const companyExternalId = String(
-      company.id ?? company.idEmpresa ?? company.companyId ?? "",
+      company.id ?? company.idEmpresa ?? company.companyId ?? (company.cpfCnpj || "").replace(/\D/g, ""),
     );
     if (!companyExternalId) {
       throw new Error("Resposta Tiny sem company id.");
@@ -395,7 +394,7 @@ export class TinyAdapter implements IERPAdapter {
 
     return {
       companyExternalId,
-      companyName: company.nome || company.razaoSocial || company.fantasia,
+      companyName: company.razaoSocial || company.nome || company.fantasia,
     };
   }
 }

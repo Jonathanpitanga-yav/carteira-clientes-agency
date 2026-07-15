@@ -526,7 +526,7 @@ export class BlingAdapter implements IERPAdapter {
     accessToken: string,
   ): Promise<{ companyExternalId: string; companyName?: string }> {
     const response = await throttledFetch(
-      "https://www.bling.com.br/Api/v3/empresas/dados-basicos",
+      "https://www.bling.com.br/Api/v3/empresas/me/dados-basicos",
       { headers: { Authorization: `Bearer ${accessToken}` } },
       this.provider,
     );

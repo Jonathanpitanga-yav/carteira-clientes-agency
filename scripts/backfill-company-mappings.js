@@ -15,7 +15,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 
 async function fetchCompanyProfile(provider, accessToken) {
   if (provider === "bling") {
-    const res = await fetch("https://www.bling.com.br/Api/v3/empresas/dados-basicos", {
+    const res = await fetch("https://www.bling.com.br/Api/v3/empresas/me/dados-basicos", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) throw new Error(`Bling HTTP ${res.status}`);
@@ -28,15 +28,16 @@ async function fetchCompanyProfile(provider, accessToken) {
   }
 
   if (provider === "tiny") {
-    const res = await fetch("https://api.tiny.com.br/public-api/v3/empresa", {
+    const res = await fetch("https://api.tiny.com.br/public-api/v3/info", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) throw new Error(`Tiny HTTP ${res.status}`);
-    const body = await res.json();
-    const company = body.data || body.empresa || body;
+    const company = await res.json();
     return {
-      companyExternalId: String(company.id ?? company.idEmpresa ?? company.companyId),
-      companyName: company.nome || company.razaoSocial,
+      companyExternalId: String(
+        company.id ?? company.idEmpresa ?? company.companyId ?? (company.cpfCnpj || "").replace(/\D/g, ""),
+      ),
+      companyName: company.razaoSocial || company.nome || company.fantasia,
     };
   }
 
