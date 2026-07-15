@@ -90,7 +90,7 @@ export function ClientAbcCurve() {
                 </thead>
                 <tbody>
                   {items.map((row) => (
-                    <tr key={`${row.client_id}-${row.sku}`} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                    <tr key={`${row.client_id}-${row.year_month}-${row.sku}`} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="py-2.5 pr-2 tabular-nums text-xs text-muted-foreground">{row.rank}</td>
                       <td className="py-2.5 pr-2">
                         <RankPosition rank={row.rank} prevRank={row.prev_rank}>
