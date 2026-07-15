@@ -198,8 +198,16 @@ export function getGlobalOrderTypeDisplay(slug: string | null, fallback?: string
 
 type UseOrdersOptions = {
   clientId?: string
+  appId?: string
+  search?: string
   page?: number
   pageSize?: number
+}
+
+export type OrderFilters = Pick<UseOrdersOptions, "clientId" | "appId" | "search">
+
+function escapeIlike(value: string): string {
+  return value.replace(/[%_\\]/g, (c) => `\\${c}`)
 }
 
 export function useOrders(options: UseOrdersOptions = {}) {
@@ -209,13 +217,41 @@ export function useOrders(options: UseOrdersOptions = {}) {
   const to = from + pageSize - 1
 
   return useQuery({
-    queryKey: [QUERY_KEYS.BILLING, "orders", { clientId: options.clientId, page, pageSize }],
+    queryKey: [
+      QUERY_KEYS.ORDERS,
+      {
+        clientId: options.clientId,
+        appId: options.appId,
+        search: options.search,
+        page,
+        pageSize,
+      },
+    ],
     queryFn: async () => {
       const sales = createSchemaClient("sales")
 
-      const baseQuery = sales.from("invoices").select("*", { count: "exact" })
+      let baseQuery = sales.from("invoices").select("*", { count: "exact" })
+
       if (options.clientId) {
-        baseQuery.eq("client_id", options.clientId)
+        baseQuery = baseQuery.eq("client_id", options.clientId)
+      }
+      if (options.appId) {
+        baseQuery = baseQuery.eq("app_id", options.appId)
+      }
+
+      const search = options.search?.trim()
+      if (search) {
+        const pattern = `%${escapeIlike(search)}%`
+        baseQuery = baseQuery.or(
+          [
+            `invoice_number.ilike.${pattern}`,
+            `erp_order_number.ilike.${pattern}`,
+            `external_id.ilike.${pattern}`,
+            `marketplace_order_id.ilike.${pattern}`,
+            `tracking_code.ilike.${pattern}`,
+            `marketplace_name.ilike.${pattern}`,
+          ].join(","),
+        )
       }
 
       const { data, error, count } = await baseQuery

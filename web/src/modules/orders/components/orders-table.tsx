@@ -80,7 +80,7 @@ export function OrdersTable({
       <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
         <ShoppingCart className="h-8 w-8" />
         <p>Nenhum pedido encontrado.</p>
-        <p className="text-xs">Sincronize os pedidos das lojas para começar.</p>
+        <p className="text-xs">Ajuste os filtros ou sincronize os pedidos das lojas.</p>
       </div>
     )
   }

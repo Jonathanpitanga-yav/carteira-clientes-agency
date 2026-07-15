@@ -5,14 +5,7 @@ import {
   loadAppDictionary, isDictionaryStale, syncAppDictionaries,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
-
-function orderNeedsDetailFetch(order: { items?: unknown[]; rawPayload?: Record<string, unknown> }): boolean {
-  const raw = order.rawPayload;
-  if (!raw || typeof raw !== "object") return true;
-  if (!raw.transporte && (raw.numeroLoja || raw.loja)) return true;
-  if ((order.items?.length ?? 0) === 0) return true;
-  return false;
-}
+import { enrichOrderWithDetail } from "../shared/order-enrichment.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -80,14 +73,7 @@ Deno.serve(async (req) => {
 
         for (const order of result.orders) {
           try {
-            let fullOrder = order;
-            if (adapter.fetchOrderById && order.externalId && orderNeedsDetailFetch(order)) {
-              try {
-                fullOrder = await adapter.fetchOrderById(accessToken, order.externalId);
-              } catch (err: any) {
-                console.error(`Erro ao buscar detalhes do pedido ${order.externalId}: ${err.message}`);
-              }
-            }
+            const fullOrder = await enrichOrderWithDetail(adapter, accessToken, order);
 
             const invoiceId = await upsertInvoice(supabase, app.client_id, appId, fullOrder, appDict);
             for (const item of fullOrder.items) {

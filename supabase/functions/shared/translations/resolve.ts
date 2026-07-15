@@ -66,6 +66,9 @@ function resolveLogisticsFromCatalogService(
     const matchesName = svc.name === serviceName || svc.aliases?.some((a) => a === serviceName);
     if (!matchesName) continue;
 
+    const fromPattern = findNamePatternRule(dict, "logistics", serviceName);
+    if (fromPattern) return fromPattern;
+
     if (svc.logistics_external_id) {
       const carrier = dict.carriers.get(svc.logistics_external_id);
       const integrationType = carrier?.provider_logistics_type || carrier?.carrier_type;
@@ -96,14 +99,26 @@ export function resolveLogistics(
     shippingMethod?: string;
   }
 ): string {
+  const namesToTry = [opts.shippingServiceName, opts.shippingMethod, opts.carrierName].filter(Boolean) as string[];
+
+  // Padrões no nome do serviço são mais específicos que enum genérico do ERP
+  for (const name of namesToTry) {
+    const fromPattern = findNamePatternRule(dict, "logistics", name);
+    if (fromPattern) return fromPattern;
+  }
+
   if (opts.serviceExternalId) {
     const svc = dict.shippingServices.get(opts.serviceExternalId);
-    if (svc?.global_logistics_slug) return svc.global_logistics_slug;
+    if (svc?.global_logistics_slug && svc.global_logistics_slug !== "unknown") {
+      return svc.global_logistics_slug;
+    }
   }
 
   if (opts.logisticsExternalId) {
     const carrier = dict.carriers.get(opts.logisticsExternalId);
-    if (carrier?.global_logistics_slug) return carrier.global_logistics_slug;
+    if (carrier?.global_logistics_slug && carrier.global_logistics_slug !== "unknown") {
+      return carrier.global_logistics_slug;
+    }
     if (carrier?.provider_logistics_type) {
       const fromType = findRule(dict, "logistics", "enum_code", carrier.provider_logistics_type);
       if (fromType) return fromType;
@@ -115,13 +130,9 @@ export function resolveLogistics(
     if (fromType) return fromType;
   }
 
-  const namesToTry = [opts.shippingServiceName, opts.shippingMethod, opts.carrierName].filter(Boolean) as string[];
   for (const name of namesToTry) {
     const fromCatalog = resolveLogisticsFromCatalogService(dict, name);
     if (fromCatalog) return fromCatalog;
-
-    const fromPattern = findNamePatternRule(dict, "logistics", name);
-    if (fromPattern) return fromPattern;
   }
 
   return "unknown";

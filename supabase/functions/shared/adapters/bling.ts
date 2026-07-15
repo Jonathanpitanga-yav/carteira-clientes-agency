@@ -36,8 +36,10 @@ const MARKETPLACE_BY_CNPJ: Record<string, string> = {
 
 const MARKETPLACE_BY_LOJA_ID: Record<string, string> = {
   "206029062": "Mercado Livre",
+  "206004789": "Mercado Livre",
   "205259199": "Magalu",
   "205207580": "Shopee",
+  "205936328": "Shopee",
 };
 
 function detectBlingMarketplace(o: any): { name: string; channel: string } | null {
@@ -70,6 +72,12 @@ function detectBlingMarketplace(o: any): { name: string; channel: string } | nul
     /^2000\d+/.test(String(o.numeroLoja || ""))
   ) {
     return { name: "Mercado Livre", channel: "Mercado Livre" };
+  }
+
+  const numeroLoja = String(o.numeroLoja || "");
+  // Shopee no Bling: ID alfanumérico (ex: 260713H06YPSSE), distinto do padrão numérico do ML.
+  if (/^[0-9]{6}[A-Z0-9]{4,}$/i.test(numeroLoja) && !/^2000\d+/.test(numeroLoja)) {
+    return { name: "Shopee", channel: "Shopee" };
   }
 
   return null;
@@ -190,7 +198,7 @@ function parseOrder(o: any): ERPOrder {
     shippingServiceExternalId,
     shippingServiceName,
     erpStatusCode: situacaoId,
-    erpStatusLabel: situacaoLabel || String(situacao.valor || ""),
+    erpStatusLabel: situacaoLabel,
     globalStatus: "pending",
     items: (o.itens || []).map(parseItem),
     notes: o.observacoes || undefined,

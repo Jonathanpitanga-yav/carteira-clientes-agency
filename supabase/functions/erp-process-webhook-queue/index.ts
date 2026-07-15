@@ -10,6 +10,7 @@ import {
   handleCors,
   jsonResponse,
 } from "../shared/db.ts";
+import { enrichOrderWithDetail } from "../shared/order-enrichment.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -78,7 +79,7 @@ Deno.serve(async (req) => {
         const providerName = (app.erp_providers as { name?: string } | null)?.name || item.provider;
         const adapter = getAdapter(providerName);
 
-        const { eventType, data: order } = await adapter.handleWebhook(
+        const { eventType, data: parsedOrder } = await adapter.handleWebhook(
           item.payload,
           item.headers || {},
         );
@@ -126,6 +127,7 @@ Deno.serve(async (req) => {
         }
 
         const appDict = await loadAppDictionary(supabase, item.app_id, providerName);
+        const order = await enrichOrderWithDetail(adapter, accessToken, parsedOrder);
         const invoiceId = await upsertInvoice(supabase, app.client_id, item.app_id, order, appDict);
 
         for (const it of order.items) {

@@ -1,36 +1,10 @@
-"use client"
-
-import { useState } from "react"
-import { useOrders } from "@/hooks/use-orders"
-import { OrdersTable } from "@/modules/orders/components/orders-table"
-import { PageContainer } from "@/components/layout/page-container"
-import { PageHeader } from "@/components/shared/page-header"
+import { OrdersPageView } from "@/modules/orders/components/orders-page-view"
 
 export default function ClientOrdersPage() {
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
-  const { data, isLoading } = useOrders({ page, pageSize })
-
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size)
-    setPage(1)
-  }
-
   return (
-    <PageContainer>
-      <PageHeader
-        title="Meus Pedidos"
-        description="Histórico de pedidos sincronizados"
-      />
-      <OrdersTable
-        orders={data?.orders}
-        isLoading={isLoading}
-        page={page}
-        pageSize={pageSize}
-        totalCount={data?.count ?? 0}
-        onPageChange={setPage}
-        onPageSizeChange={handlePageSizeChange}
-      />
-    </PageContainer>
+    <OrdersPageView
+      title="Meus Pedidos"
+      description="Histórico de pedidos sincronizados"
+    />
   )
 }

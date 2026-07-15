@@ -47,7 +47,7 @@ export function SyncQueueNotifier() {
       const label = item.client_name ?? "Cliente"
       if (item.status === "completed") {
         toast.success(`Sincronização concluída: ${label}`)
-        qc.invalidateQueries({ queryKey: [QUERY_KEYS.BILLING, "orders"] })
+        qc.invalidateQueries({ queryKey: [QUERY_KEYS.ORDERS] })
       } else if (item.status === "failed") {
         toast.error(`Falha na sincronização: ${label}`, {
           description: item.error ?? undefined,

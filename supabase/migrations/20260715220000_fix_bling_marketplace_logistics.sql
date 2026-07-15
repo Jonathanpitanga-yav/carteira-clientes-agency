@@ -1,7 +1,7 @@
 -- Bling: enum de tipo de logística + correção marketplace/logística Mercado Livre
 
 INSERT INTO sales.erp_provider_mapping_rules (provider, dimension, source_kind, source_value, global_slug, priority) VALUES
-  ('bling', 'logistics', 'enum_code', 'MercadoEnvios', 'mercado_envios_full', 10),
+  ('bling', 'logistics', 'enum_code', 'MercadoEnvios', 'mercado_envios', 10),
   ('bling', 'logistics', 'enum_code', 'MercadoEnviosFlex', 'mercado_envios_flex', 10),
   ('bling', 'logistics', 'enum_code', 'MagaluEntregas', 'magalu_entregas', 10),
   ('bling', 'logistics', 'enum_code', 'LogisticaShopee', 'shopee_envios', 10)
@@ -25,15 +25,7 @@ SET name = 'Mercado Livre',
 WHERE app_id = '594b3e65-05c2-457b-a0a1-ff638078f97c'
   AND external_id = '206029062';
 
--- Recalcula slug de serviços Prioritario vinculados à integração Mercado Envios (não Flex)
-UPDATE sales.erp_shipping_services s
-SET global_logistics_slug = 'mercado_envios_full'
-FROM sales.erp_carriers c
-WHERE s.app_id = c.app_id
-  AND s.logistics_external_id = c.external_id
-  AND s.app_id = '594b3e65-05c2-457b-a0a1-ff638078f97c'
-  AND c.carrier_type = 'MercadoEnvios';
-
+-- Recalcula slug de serviços Prioritario vinculados à integração Mercado Envios Flex
 UPDATE sales.erp_shipping_services s
 SET global_logistics_slug = 'mercado_envios_flex'
 FROM sales.erp_carriers c
@@ -41,3 +33,16 @@ WHERE s.app_id = c.app_id
   AND s.logistics_external_id = c.external_id
   AND s.app_id = '594b3e65-05c2-457b-a0a1-ff638078f97c'
   AND c.carrier_type = 'MercadoEnviosFlex';
+
+-- Serviços Mercado Envios padrão (Normal, Expresso, etc.)
+UPDATE sales.erp_shipping_services s
+SET global_logistics_slug = 'mercado_envios'
+FROM sales.erp_carriers c
+WHERE s.app_id = c.app_id
+  AND s.logistics_external_id = c.external_id
+  AND s.app_id = '594b3e65-05c2-457b-a0a1-ff638078f97c'
+  AND c.carrier_type = 'MercadoEnvios'
+  AND s.name NOT ILIKE '%full%'
+  AND s.name NOT ILIKE '%package%'
+  AND s.name NOT ILIKE '%flex%'
+  AND s.name NOT ILIKE '%priorit%';

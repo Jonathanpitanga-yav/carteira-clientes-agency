@@ -5,6 +5,7 @@ import {
   loadAppDictionary, isDictionaryStale, syncAppDictionaries,
   handleCors, jsonResponse,
 } from "../shared/db.ts";
+import { enrichOrderWithDetail, orderNeedsDetailFetch } from "../shared/order-enrichment.ts";
 
 function dateNDaysAgo(n: number): string {
   const d = new Date();
@@ -107,33 +108,41 @@ Deno.serve(async (req) => {
           const result = await adapter.fetchOrders(accessToken, { fromDate, page });
           console.log(`[erp-process-sync-queue] App ${item.app_id}: página ${page} retornou ${result.orders.length} pedidos`);
 
-          const existingIds = new Set<string>();
+          const existingByExtId = new Map<string, { raw_payload: Record<string, unknown> | null }>();
           if (result.orders.length > 0) {
-            const extIds = result.orders.map((o: any) => String(o.externalId));
+            const extIds = result.orders.map((o: { externalId: string }) => String(o.externalId));
             const { data: existing } = await sales
               .from("invoices")
-              .select("external_id")
+              .select("external_id, raw_payload")
               .eq("app_id", item.app_id)
               .in("external_id", extIds);
             if (existing) {
               for (const inv of existing) {
-                existingIds.add(inv.external_id);
+                existingByExtId.set(inv.external_id, { raw_payload: inv.raw_payload });
               }
             }
           }
 
           for (const order of result.orders) {
             try {
-              if (existingIds.has(String(order.externalId))) {
+              const extId = String(order.externalId);
+              const existing = existingByExtId.get(extId);
+              const needsUpdate = !existing || orderNeedsDetailFetch({
+                items: order.items,
+                rawPayload: existing?.raw_payload ?? order.rawPayload,
+              });
+
+              if (!needsUpdate) {
                 synced++;
                 continue;
               }
 
-              const invoiceId = await upsertInvoice(supabase, app.client_id, item.app_id, order, appDict);
-              for (const it of order.items) {
+              const fullOrder = await enrichOrderWithDetail(adapter, accessToken, order);
+              const invoiceId = await upsertInvoice(supabase, app.client_id, item.app_id, fullOrder, appDict);
+              for (const it of fullOrder.items) {
                 await upsertProduct(supabase, app.client_id, item.app_id, it);
               }
-              await upsertInvoiceItems(supabase, invoiceId, order.items);
+              await upsertInvoiceItems(supabase, invoiceId, fullOrder.items);
               synced++;
             } catch (err: any) {
               errors++;
