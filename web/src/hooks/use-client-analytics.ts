@@ -33,9 +33,8 @@ export type LogisticsRow = {
 export type AbcItemRow = {
   client_id: string
   client_name: string | null
-  product_id: string
-  product_name: string
   sku: string | null
+  product_name: string
   category: string | null
   year_month: string
   total_revenue: number
