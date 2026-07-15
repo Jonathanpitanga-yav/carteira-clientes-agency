@@ -1,15 +1,12 @@
-type PageHeaderProps = {
-  title: string
-  description?: string
-}
-
-export function PageHeader({ title, description }: PageHeaderProps) {
+type PageHeaderProps = { title: string; description?: string; children?: React.ReactNode }
+export function PageHeader({ title, description, children }: PageHeaderProps) {
   return (
-    <div>
-      <h1 className="text-2xl font-heading font-bold">{title}</h1>
-      {description && (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      )}
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 className="text-2xl font-heading font-bold tracking-tight">{title}</h1>
+        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {children && <div className="mt-2 sm:mt-0">{children}</div>}
     </div>
   )
 }

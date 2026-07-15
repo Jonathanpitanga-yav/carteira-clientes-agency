@@ -52,9 +52,9 @@ function aggregateRows(rows: PortfolioRow[], yearMonth: string) {
   return rows.find((r) => r.year_month === yearMonth) ?? null
 }
 
-export function usePortfolioOverview() {
-  const currentYm = getCurrentYearMonth()
-  const prevYm = getPreviousYearMonth()
+export function usePortfolioOverview(yearMonth?: string) {
+  const currentYm = yearMonth ?? getCurrentYearMonth()
+  const prevYm = getPreviousYearMonth(new Date(currentYm + "-01"))
 
   return useQuery({
     queryKey: [QUERY_KEYS.ANALYTICS, "portfolio", currentYm, prevYm],

@@ -28,7 +28,7 @@ export function RankMovement({ rank, prevRank, compact = false, className }: Ran
     const delta = prevRank - rank
     return (
       <span
-        className={cn("inline-flex shrink-0 items-center gap-0.5 text-emerald-600", compact ? "w-4 justify-center" : "", className)}
+        className={cn("inline-flex shrink-0 items-center gap-0.5 text-cyan-500", compact ? "w-4 justify-center" : "", className)}
         title={`Subiu ${delta} posição(ões)`}
       >
         <ArrowUp className="h-3.5 w-3.5 shrink-0" />

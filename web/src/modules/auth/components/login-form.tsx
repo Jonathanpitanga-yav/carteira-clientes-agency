@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { useAuthForm } from "@/modules/auth/hooks/use-auth-form"
 import { ROUTES } from "@/lib/constants"
-import { Loader2 } from "lucide-react"
+import { Loader2, Mail, Lock, ArrowRight } from "lucide-react"
+import { Logo } from "@/components/ui/logo"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
@@ -19,67 +20,57 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const ok =
-      mode === "password"
-        ? await signIn(email, password)
-        : await sendMagicLink(email)
-
-    if (ok && mode === "password") {
-      router.push(ROUTES.ADMIN)
+    if (mode === "password") {
+      const result = await signIn(email, password)
+      if (result.ok) {
+        router.push(result.isTempPassword ? "/auth/change-password" : ROUTES.ADMIN)
+      }
+    } else {
+      const ok = await sendMagicLink(email)
     }
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-heading">Seller Wallet</CardTitle>
-        <CardDescription>Gestão de carteira de clientes</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">E-mail</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="seu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </div>
-
-          {mode === "password" && (
+    <div className="flex min-h-screen items-center justify-center p-4 bg-gradient-to-br from-cyan-950/5 via-background to-purple-950/5">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-purple-500/10 via-transparent to-transparent pointer-events-none" />
+      <Card className="relative w-full max-w-sm border-border/50 shadow-2xl shadow-cyan-500/5 backdrop-blur-sm">
+        <CardHeader className="text-center pt-8 pb-4">
+          <Logo variant="login" className="justify-center mb-3" />
+          <p className="text-sm text-muted-foreground">Gestão de carteira de clientes</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <Label htmlFor="email" className="text-xs font-medium">E-mail</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="email" type="email" placeholder="seu@email.com" value={email}
+                  onChange={(e) => setEmail(e.target.value)} required autoFocus className="pl-9" />
+              </div>
             </div>
-          )}
-
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "password" ? "Entrar" : "Enviar link mágico"}
-          </Button>
-
-          <button
-            type="button"
-            onClick={() => setMode(mode === "password" ? "magic" : "password")}
-            className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {mode === "password"
-              ? "Entrar com link mágico"
-              : "Entrar com e-mail e senha"}
-          </button>
-        </form>
-      </CardContent>
-    </Card>
+            {mode === "password" && (
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-xs font-medium">Senha</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input id="password" type="password" placeholder="••••••••" value={password}
+                    onChange={(e) => setPassword(e.target.value)} required className="pl-9" />
+                </div>
+              </div>
+            )}
+            <Button type="submit" className="w-full bg-gradient-primary hover:opacity-90 transition-opacity" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === "password" ? "Entrar" : "Enviar link mágico"}
+              {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
+            </Button>
+            <button type="button" onClick={() => setMode(mode === "password" ? "magic" : "password")}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors">
+              {mode === "password" ? "Entrar com link mágico" : "Entrar com e-mail e senha"}
+            </button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

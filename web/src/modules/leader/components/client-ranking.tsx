@@ -11,13 +11,15 @@ import Link from "next/link"
 type ClientRankingProps = {
   clientLinkPrefix?: string
   limit?: number
+  yearMonth?: string
 }
 
 export function ClientRanking({
   clientLinkPrefix = "/leader/clients",
   limit = 50,
+  yearMonth,
 }: ClientRankingProps) {
-  const { data: ranking, isLoading } = useClientRanking(limit)
+  const { data: ranking, isLoading } = useClientRanking(limit, yearMonth)
 
   if (isLoading) {
     return (
@@ -67,7 +69,7 @@ export function ClientRanking({
                 <RankPosition rank={row.rank} prevRank={row.prev_rank}>
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
                     {position === 1 ? (
-                      <Trophy className="h-4 w-4 text-amber-500" />
+                      <Trophy className="h-4 w-4 text-cyan-500" />
                     ) : (
                       position
                     )}

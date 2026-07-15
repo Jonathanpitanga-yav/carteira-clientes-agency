@@ -10,10 +10,10 @@ export default function AnalystAnalyticsPage() {
     <PageContainer>
       <PageHeader
         title="Analytics"
-        description="Visão macro da agência — GMV consolidado, tickets e clientes ativos"
+        description="Visão unificada da agência — GMV, rankings de clientes, marketplaces, e-commerce e canais"
       />
       <AnalyticsSubnav basePath="/analyst/analytics" />
-      <PortfolioOverview />
+      <PortfolioOverview basePath="/analyst" />
     </PageContainer>
   )
 }

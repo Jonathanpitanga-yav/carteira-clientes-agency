@@ -88,7 +88,7 @@ export function ClientConcentrationChart() {
                 {chartData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={entry.isWarning ? "#ef4444" : "#6366f1"}
+                    fill={entry.isWarning ? "#ef4444" : "#6e29f6"}
                     fillOpacity={entry.isWarning ? 0.9 : 0.7}
                   />
                 ))}

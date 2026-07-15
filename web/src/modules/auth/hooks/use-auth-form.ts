@@ -9,16 +9,17 @@ export function useAuthForm() {
 
   const signIn = useCallback(async (email: string, password: string) => {
     setIsLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       toast.error(humanError(error.message))
       setIsLoading(false)
-      return false
+      return { ok: false, signIn: false, isTempPassword: false }
     }
 
     toast.success("Login realizado com sucesso!")
-    return true
+    const isTemp = !!data.user?.user_metadata?.is_temp_password
+    return { ok: true, signIn: true, isTempPassword: isTemp }
   }, [])
 
   const sendMagicLink = useCallback(async (email: string) => {

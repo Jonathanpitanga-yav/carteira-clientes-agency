@@ -14,8 +14,12 @@ function getEcommercePlatformDisplay(slug: string | null | undefined) {
   return getGlobalMarketplaceDisplay(slug)
 }
 
-export function EcommerceRankingCard() {
-  const { data: ranking, isLoading } = useEcommerceRanking(12)
+type EcommerceRankingCardProps = {
+  yearMonth?: string
+}
+
+export function EcommerceRankingCard({ yearMonth }: EcommerceRankingCardProps) {
+  const { data: ranking, isLoading } = useEcommerceRanking(12, yearMonth)
 
   if (isLoading) {
     return (

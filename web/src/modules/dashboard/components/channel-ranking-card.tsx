@@ -13,16 +13,20 @@ const STORE_TYPE_LABELS: Record<string, string> = {
 }
 
 const STORE_TYPE_COLORS: Record<string, string> = {
-  marketplace: "bg-violet-500",
-  ecommerce: "bg-sky-500",
+  marketplace: "bg-cyan-500",
+  ecommerce: "bg-purple-500",
 }
 
 function findChannelRow(rows: ChannelRevenueRow[], slug: string) {
   return rows.find((r) => r.channel_slug === slug)
 }
 
-export function ChannelRankingCard() {
-  const { data, isLoading } = useChannelRevenue()
+type ChannelRankingCardProps = {
+  yearMonth?: string
+}
+
+export function ChannelRankingCard({ yearMonth }: ChannelRankingCardProps) {
+  const { data, isLoading } = useChannelRevenue(yearMonth)
 
   const rows = (data?.current ?? []).slice().sort((a, b) => Number(b.total_revenue ?? 0) - Number(a.total_revenue ?? 0))
   const previousRows = data?.previous ?? []

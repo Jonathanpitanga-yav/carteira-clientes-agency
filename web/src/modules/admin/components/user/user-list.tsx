@@ -13,16 +13,18 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Pencil, Link2 } from "lucide-react"
+import { Pencil, Link2, UserPlus } from "lucide-react"
 import { ROLE_LABELS, type Role } from "@/lib/constants"
 import { useState } from "react"
 import { UserFormDialog } from "./user-form"
+import { CreateUserDialog } from "./create-user-dialog"
 import { LinkClientsDialog } from "./link-clients-dialog"
 
 export function UserList() {
   const { data: users, isLoading, error } = useUsersWithClients()
   const { data: allClients } = useClients()
   const [editUser, setEditUser] = useState<UserWithClients | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
   const [linkUser, setLinkUser] = useState<UserWithClients | null>(null)
 
   if (error) {
@@ -31,9 +33,15 @@ export function UserList() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-heading font-semibold">
-        {users?.length ?? 0} usuário(s)
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-heading font-semibold">
+          {users?.length ?? 0} usuário(s)
+        </h2>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <UserPlus className="mr-1.5 h-4 w-4" />
+          Novo usuário
+        </Button>
+      </div>
 
       <div className="rounded-lg border border-border">
         <Table>
@@ -112,6 +120,8 @@ export function UserList() {
           </TableBody>
         </Table>
       </div>
+
+      <CreateUserDialog open={showCreate} onOpenChange={setShowCreate} />
 
       {editUser && (
         <UserFormDialog

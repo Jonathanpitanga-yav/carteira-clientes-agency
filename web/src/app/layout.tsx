@@ -20,8 +20,8 @@ const outfit = Outfit({
 })
 
 export const metadata: Metadata = {
-  title: "Seller Wallet",
-  description: "Gestão de Carteira de Clientes para Agências",
+  title: "YAV Digital — Seller Wallet",
+  description: "Gestão de Carteira de Clientes — YAV Digital",
 }
 
 export default function RootLayout({

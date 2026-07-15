@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils"
 const tabs = [
   { label: "Overview do Portfólio", href: "/admin/analytics" },
   { label: "Share e Concentração", href: "/admin/analytics/share" },
-  { label: "Benchmarks & Ranking", href: "/admin/analytics/benchmarks" },
   { label: "Análise de Clientes", href: "/admin/analytics/clients" },
   { label: "Curva ABC", href: "/admin/analytics/clients/abc" },
 ]

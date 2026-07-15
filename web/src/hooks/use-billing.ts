@@ -206,16 +206,16 @@ export function useClientBillingSummary() {
   }
 }
 
-export function useClientRanking(limit = 10) {
-  const currentYm = getCurrentYearMonth()
+export function useClientRanking(limit = 10, yearMonth?: string) {
+  const ym = yearMonth ?? getCurrentYearMonth()
 
   return useQuery({
-    queryKey: [QUERY_KEYS.BILLING, "client-ranking", currentYm, limit],
+    queryKey: [QUERY_KEYS.BILLING, "client-ranking", ym, limit],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
         .from("client_monthly_ranking")
         .select("*")
-        .eq("year_month", currentYm)
+        .eq("year_month", ym)
         .order("rank", { ascending: true })
         .limit(limit)
 
@@ -225,16 +225,16 @@ export function useClientRanking(limit = 10) {
   })
 }
 
-export function useMarketplaceRanking(limit = 8) {
-  const currentYm = getCurrentYearMonth()
+export function useMarketplaceRanking(limit = 8, yearMonth?: string) {
+  const ym = yearMonth ?? getCurrentYearMonth()
 
   return useQuery({
-    queryKey: [QUERY_KEYS.BILLING, "marketplace-ranking", currentYm, limit],
+    queryKey: [QUERY_KEYS.BILLING, "marketplace-ranking", ym, limit],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
         .from("marketplace_monthly_ranking")
         .select("*")
-        .eq("year_month", currentYm)
+        .eq("year_month", ym)
         .neq("marketplace_slug", "unknown")
         .order("rank", { ascending: true })
         .limit(limit)
@@ -245,16 +245,16 @@ export function useMarketplaceRanking(limit = 8) {
   })
 }
 
-export function useEcommerceRanking(limit = 8) {
-  const currentYm = getCurrentYearMonth()
+export function useEcommerceRanking(limit = 8, yearMonth?: string) {
+  const ym = yearMonth ?? getCurrentYearMonth()
 
   return useQuery({
-    queryKey: [QUERY_KEYS.BILLING, "ecommerce-ranking", currentYm, limit],
+    queryKey: [QUERY_KEYS.BILLING, "ecommerce-ranking", ym, limit],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
         .from("ecommerce_monthly_ranking")
         .select("*")
-        .eq("year_month", currentYm)
+        .eq("year_month", ym)
         .order("rank", { ascending: true })
         .limit(limit)
 
@@ -264,9 +264,9 @@ export function useEcommerceRanking(limit = 8) {
   })
 }
 
-export function useChannelRevenue() {
-  const currentYm = getCurrentYearMonth()
-  const prevYm = getPreviousYearMonth()
+export function useChannelRevenue(yearMonth?: string) {
+  const currentYm = yearMonth ?? getCurrentYearMonth()
+  const prevYm = getPreviousYearMonth(new Date(currentYm + "-01"))
 
   return useQuery({
     queryKey: [QUERY_KEYS.BILLING, "channel-revenue", currentYm, prevYm],

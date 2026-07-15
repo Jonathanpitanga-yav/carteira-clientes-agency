@@ -147,6 +147,22 @@ export function useUserClientLinks(userId: string) {
   })
 }
 
+export function useCreateUser() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { email: string; password: string; full_name: string; roles: string[] }) => {
+      const { createUserAction } = await import("@/app/actions/create-user")
+      return createUserAction(input)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [QUERY_KEYS.USERS] })
+      toast.success("Usuário criado com sucesso!")
+    },
+    onError: (err) => toast.error(humanError(err)),
+  })
+}
+
 export function useUpdateClientLinks() {
   const qc = useQueryClient()
 

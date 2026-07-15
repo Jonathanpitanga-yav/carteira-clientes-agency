@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/layout/sidebar"
 import { formatRoles } from "@/lib/constants"
-import { Sun, Moon, LogOut, User, Menu } from "lucide-react"
+import { Sun, Moon, LogOut, Menu } from "lucide-react"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
@@ -23,7 +23,7 @@ export function Header() {
   const initials = user?.email?.charAt(0).toUpperCase() ?? "?"
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background/80 backdrop-blur-sm px-4 lg:px-6">
       <SidebarTrigger />
 
       <div className="flex-1" />
@@ -32,14 +32,15 @@ export function Header() {
         variant="ghost"
         size="icon"
         onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        className="text-muted-foreground hover:text-foreground"
       >
         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </Button>
 
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <Avatar className="h-8 w-8 cursor-pointer">
-            <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        <DropdownMenuTrigger className="outline-none">
+          <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
+            <AvatarFallback className="text-xs bg-gradient-primary text-primary-foreground">{initials}</AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
@@ -54,7 +55,7 @@ export function Header() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={signOut}>
+          <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
             <LogOut className="mr-2 h-4 w-4" />
             Sair
           </DropdownMenuItem>
