@@ -10,7 +10,12 @@ node_modules/
 # Temp
 schemas_dump.sql
 web/migrate-schemas.sql
-supabase/.temp/
+supabase/.temp
+config.json
+telemetry-*.json
+scripts/*.cjs
+web/screenshot_script.js
+web/.env.local/
 .deploy-payloads/
 .tmp-*.ts
 
