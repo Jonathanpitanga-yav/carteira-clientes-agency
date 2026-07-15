@@ -41,6 +41,7 @@ export type AbcItemRow = {
   total_quantity: number
   order_count: number
   rank: number
+  prev_rank: number | null
   cumulative_pct: number
   abc_class: "A" | "B" | "C"
 }
@@ -99,23 +100,20 @@ export function useDashboardLogistics(filters: DashboardFilters) {
   })
 }
 
-export function useClientAbcCurve() {
+export function useDashboardAbc(filters: DashboardFilters) {
   return useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, "abc-curve"],
+    queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-abc", filters],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
-        .from("client_item_abc_curve")
-        .select("*")
-        .order("abc_class", { ascending: true })
-        .order("total_revenue", { ascending: false })
+        .rpc("get_dashboard_abc", buildRpcParams(filters))
       if (error) throw error
       return (data ?? []) as AbcItemRow[]
     },
   })
 }
 
-export function useClientAbcSummary() {
-  const abc = useClientAbcCurve()
+export function useAbcSummary(filters: DashboardFilters) {
+  const abc = useDashboardAbc(filters)
   const items = abc.data ?? []
   const aItems = items.filter((i) => i.abc_class === "A")
   const bItems = items.filter((i) => i.abc_class === "B")

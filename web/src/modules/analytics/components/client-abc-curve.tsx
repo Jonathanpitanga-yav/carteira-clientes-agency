@@ -1,6 +1,10 @@
 "use client"
 
-import { useClientAbcSummary } from "@/hooks/use-client-analytics"
+import { useState } from "react"
+import { useAbcSummary, useDashboardAbc } from "@/hooks/use-client-analytics"
+import type { DashboardFilters } from "@/hooks/use-client-analytics"
+import { ClientDashboardFilters } from "@/modules/analytics/components/filters/client-dashboard-filters"
+import { RankPosition } from "@/modules/dashboard/components/rank-movement"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatCompactCurrency } from "@/lib/utils/format"
@@ -13,103 +17,105 @@ const ABC_BADGE: Record<string, { label: string; class: string }> = {
 }
 
 export function ClientAbcCurve() {
-  const { items, aCount, bCount, cCount, aRevenue, bRevenue, cRevenue, totalRevenue, isLoading } = useClientAbcSummary()
+  const [filters, setFilters] = useState<DashboardFilters>({})
+  const { data: rawItems, isLoading: rawLoading } = useDashboardAbc(filters)
+  const { aCount, bCount, cCount, aRevenue, bRevenue, cRevenue, totalRevenue, isLoading } = useAbcSummary(filters)
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-heading">Curva ABC de Itens</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (!items.length) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-heading">Curva ABC de Itens</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Nenhum item vendido no período.</p>
-        </CardContent>
-      </Card>
-    )
-  }
+  const items = (rawItems ?? []).sort((a, b) => {
+    if (a.abc_class !== b.abc_class) return a.abc_class < b.abc_class ? -1 : 1
+    return a.rank - b.rank
+  })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <ClientDashboardFilters filters={filters} onChange={setFilters} />
+
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border p-4">
-          <div className="flex items-center gap-2">
-            <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE.A.class)}>A</span>
-            <span className="text-sm font-medium text-muted-foreground">Itens A (80%)</span>
+        {([
+          { cls: "A", label: "A — 80%", count: aCount, revenue: aRevenue },
+          { cls: "B", label: "B — 15%", count: bCount, revenue: bRevenue },
+          { cls: "C", label: "C — 5%", count: cCount, revenue: cRevenue },
+        ] as const).map(({ cls, label, count, revenue }) => (
+          <div key={cls} className="rounded-lg border p-4">
+            <div className="flex items-center gap-2">
+              <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE[cls].class)}>
+                {cls}
+              </span>
+              <span className="text-sm font-medium text-muted-foreground">{label}</span>
+            </div>
+            {isLoading ? (
+              <Skeleton className="mt-2 h-7 w-24" />
+            ) : (
+              <>
+                <p className="mt-2 text-2xl font-bold font-heading">{count}</p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {formatCompactCurrency(revenue)}
+                  {totalRevenue > 0 && ` — ${((revenue / totalRevenue) * 100).toFixed(0)}% do total`}
+                </p>
+              </>
+            )}
           </div>
-          <p className="mt-2 text-2xl font-bold font-heading">{aCount}</p>
-          <p className="text-xs text-muted-foreground tabular-nums">{formatCompactCurrency(aRevenue)} — {totalRevenue > 0 ? ((aRevenue / totalRevenue) * 100).toFixed(0) : 0}% do total</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <div className="flex items-center gap-2">
-            <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE.B.class)}>B</span>
-            <span className="text-sm font-medium text-muted-foreground">Itens B (15%)</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold font-heading">{bCount}</p>
-          <p className="text-xs text-muted-foreground tabular-nums">{formatCompactCurrency(bRevenue)} — {totalRevenue > 0 ? ((bRevenue / totalRevenue) * 100).toFixed(0) : 0}% do total</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <div className="flex items-center gap-2">
-            <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE.C.class)}>C</span>
-            <span className="text-sm font-medium text-muted-foreground">Itens C (5%)</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold font-heading">{cCount}</p>
-          <p className="text-xs text-muted-foreground tabular-nums">{formatCompactCurrency(cRevenue)} — {totalRevenue > 0 ? ((cRevenue / totalRevenue) * 100).toFixed(0) : 0}% do total</p>
-        </div>
+        ))}
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-heading">Todos os itens</CardTitle>
-          <p className="text-xs text-muted-foreground">{items.length} itens classificados por faturamento</p>
+          <p className="text-xs text-muted-foreground">
+            {items.length} itens — ranking vs período anterior
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium">Classif.</th>
-                  <th className="pb-2 font-medium">SKU</th>
-                  <th className="pb-2 font-medium">Descrição</th>
-                  <th className="pb-2 font-medium">Categoria</th>
-                  <th className="pb-2 font-medium tabular-nums text-right">Qtd vendida</th>
-                  <th className="pb-2 font-medium tabular-nums text-right">Pedidos</th>
-                  <th className="pb-2 font-medium tabular-nums text-right">% Acum.</th>
-                  <th className="pb-2 font-medium tabular-nums text-right">Faturamento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => (
-                  <tr key={row.product_id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 pr-3">
-                      <span className={cn("inline-flex h-5 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE[row.abc_class]?.class)}>
-                        {row.abc_class}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground max-w-[100px] truncate">{row.sku ?? "—"}</td>
-                    <td className="py-2.5 pr-3 font-medium max-w-[200px] truncate">{row.product_name}</td>
-                    <td className="py-2.5 pr-3 text-xs text-muted-foreground">{row.category ?? "—"}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums">{Number(row.total_quantity).toLocaleString("pt-BR")}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums">{row.order_count}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{row.cumulative_pct.toFixed(1)}%</td>
-                    <td className="py-2.5 text-right font-semibold tabular-nums">{formatCompactCurrency(Number(row.total_revenue))}</td>
+          {rawLoading ? (
+            <div className="space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : !items.length ? (
+            <p className="text-sm text-muted-foreground">Nenhum item vendido no período.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pb-2 font-medium">#</th>
+                    <th className="pb-2 font-medium">Mov.</th>
+                    <th className="pb-2 font-medium">Classif.</th>
+                    <th className="pb-2 font-medium">Cliente</th>
+                    <th className="pb-2 font-medium">SKU</th>
+                    <th className="pb-2 font-medium">Descrição</th>
+                    <th className="pb-2 font-medium">Categoria</th>
+                    <th className="pb-2 font-medium tabular-nums text-right">Qtd vendida</th>
+                    <th className="pb-2 font-medium tabular-nums text-right">Pedidos</th>
+                    <th className="pb-2 font-medium tabular-nums text-right">% Acum.</th>
+                    <th className="pb-2 font-medium tabular-nums text-right">Faturamento</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {items.map((row) => (
+                    <tr key={row.product_id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="py-2.5 pr-2 tabular-nums text-xs text-muted-foreground">{row.rank}</td>
+                      <td className="py-2.5 pr-2">
+                        <RankPosition rank={row.rank} prevRank={row.prev_rank}>
+                          <span />
+                        </RankPosition>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className={cn("inline-flex h-5 w-6 items-center justify-center rounded text-xs font-bold", ABC_BADGE[row.abc_class]?.class)}>
+                          {row.abc_class}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 text-xs text-muted-foreground truncate max-w-[120px]">{row.client_name ?? "—"}</td>
+                      <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground max-w-[90px] truncate">{row.sku ?? "—"}</td>
+                      <td className="py-2.5 pr-3 font-medium max-w-[180px] truncate">{row.product_name}</td>
+                      <td className="py-2.5 pr-3 text-xs text-muted-foreground">{row.category ?? "—"}</td>
+                      <td className="py-2.5 pr-3 text-right tabular-nums">{Number(row.total_quantity).toLocaleString("pt-BR")}</td>
+                      <td className="py-2.5 pr-3 text-right tabular-nums">{row.order_count}</td>
+                      <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">{row.cumulative_pct.toFixed(1)}%</td>
+                      <td className="py-2.5 text-right font-semibold tabular-nums">{formatCompactCurrency(Number(row.total_revenue))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
