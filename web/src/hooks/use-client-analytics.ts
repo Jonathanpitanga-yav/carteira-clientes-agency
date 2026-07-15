@@ -37,6 +37,7 @@ export type AbcItemRow = {
   product_name: string
   sku: string | null
   category: string | null
+  year_month: string
   total_revenue: number
   total_quantity: number
   order_count: number
@@ -100,12 +101,33 @@ export function useDashboardLogistics(filters: DashboardFilters) {
   })
 }
 
+function getCurrentYearMonth() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
 export function useDashboardAbc(filters: DashboardFilters) {
+  const currentYm = getCurrentYearMonth()
+
   return useQuery({
     queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-abc", filters],
     queryFn: async () => {
-      const { data, error } = await getSalesClient()
-        .rpc("get_dashboard_abc", buildRpcParams(filters))
+      let query = getSalesClient()
+        .from("client_item_abc_curve")
+        .select("*")
+        .eq("year_month", currentYm)
+        .order("abc_class", { ascending: true })
+        .order("rank", { ascending: true })
+
+      if (filters.clientIds?.length) {
+        if (filters.clientIds.length === 1) {
+          query = query.eq("client_id", filters.clientIds[0])
+        } else {
+          query = query.in("client_id", filters.clientIds)
+        }
+      }
+
+      const { data, error } = await query
       if (error) throw error
       return (data ?? []) as AbcItemRow[]
     },
