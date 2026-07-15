@@ -47,6 +47,8 @@ const navItems: (NavItem | NavGroup)[] = [
       { label: "Overview do Portfólio", href: "/admin/analytics", roles: ["admin", "leader", "analyst"] },
       { label: "Share e Concentração", href: "/admin/analytics/share", roles: ["admin", "leader", "analyst"] },
       { label: "Benchmarks & Ranking", href: "/admin/analytics/benchmarks", roles: ["admin", "leader", "analyst"] },
+      { label: "Análise de Clientes", href: "/admin/analytics/clients", roles: ["admin", "leader", "analyst"] },
+      { label: "Curva ABC", href: "/admin/analytics/clients/abc", roles: ["admin", "leader", "analyst"] },
     ],
   },
   {

@@ -8,6 +8,8 @@ const tabs = [
   { label: "Overview do Portfólio", href: "/admin/analytics" },
   { label: "Share e Concentração", href: "/admin/analytics/share" },
   { label: "Benchmarks & Ranking", href: "/admin/analytics/benchmarks" },
+  { label: "Análise de Clientes", href: "/admin/analytics/clients" },
+  { label: "Curva ABC", href: "/admin/analytics/clients/abc" },
 ]
 
 export function AnalyticsSubnav({ basePath = "/admin/analytics" }: { basePath?: string }) {
@@ -19,12 +21,9 @@ export function AnalyticsSubnav({ basePath = "/admin/analytics" }: { basePath?: 
   }))
 
   return (
-    <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
+    <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1">
       {resolved.map((tab) => {
-        const isActive =
-          tab.href === basePath
-            ? pathname === tab.href || pathname === basePath
-            : pathname.startsWith(tab.href)
+        const isActive = pathname === tab.href || (tab.href !== basePath && tab.href !== basePath + "/clients" && pathname.startsWith(tab.href))
         return (
           <Link
             key={tab.href}
