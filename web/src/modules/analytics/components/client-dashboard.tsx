@@ -1,14 +1,15 @@
 "use client"
 
-import { useBillingSummary } from "@/hooks/use-billing"
-import { useClientChannelBreakdown, useClientLogisticsBreakdown } from "@/hooks/use-client-analytics"
+import { useState } from "react"
+import { useDashboardKpis, useDashboardChannels, useDashboardLogistics } from "@/hooks/use-client-analytics"
+import type { DashboardFilters } from "@/hooks/use-client-analytics"
+import { ClientDashboardFilters } from "@/modules/analytics/components/filters/client-dashboard-filters"
 import { StatCard } from "@/components/shared/stat-card"
 import { PeriodComparison } from "@/modules/dashboard/components/period-comparison"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatCompactCurrency } from "@/lib/utils/format"
-import { getGlobalMarketplaceDisplay } from "@/hooks/use-orders"
-import { getGlobalLogisticsDisplay } from "@/hooks/use-orders"
+import { getGlobalMarketplaceDisplay, getGlobalLogisticsDisplay } from "@/hooks/use-orders"
 import { TrendingUp, Receipt, DollarSign } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -18,44 +19,43 @@ import {
 const CHART_COLORS = ["#6366f1", "#f59e0b", "#06b6d4", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"]
 
 export function ClientDashboard() {
-  const { summary, isLoading } = useBillingSummary()
-  const { data: channels, isLoading: chLoading } = useClientChannelBreakdown()
-  const { data: logistics, isLoading: logLoading } = useClientLogisticsBreakdown()
-  const loading = isLoading || chLoading || logLoading
+  const [filters, setFilters] = useState<DashboardFilters>({})
+
+  const { data: kpis, isLoading: kpisLoading } = useDashboardKpis(filters)
+  const { data: channels, isLoading: chLoading } = useDashboardChannels(filters)
+  const { data: logistics, isLoading: logLoading } = useDashboardLogistics(filters)
+  const loading = kpisLoading || chLoading || logLoading
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <ClientDashboardFilters filters={filters} onChange={setFilters} />
+
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Faturamento do mês" icon={<TrendingUp className="h-4 w-4" />} loading={loading}>
-          <div className="text-2xl font-bold font-heading">{formatCompactCurrency(summary.monthlyApproved)}</div>
-          <PeriodComparison current={summary.monthlyApproved} previous={summary.previousMonthApproved} format="percent" className="mt-1" />
+        <StatCard label="Faturamento" icon={<TrendingUp className="h-4 w-4" />} loading={loading}>
+          <div className="text-2xl font-bold font-heading">{formatCompactCurrency(kpis?.total_revenue ?? 0)}</div>
+          <PeriodComparison current={kpis?.total_revenue ?? 0} previous={kpis?.prev_total_revenue ?? 0} format="percent" className="mt-1" />
         </StatCard>
-        <StatCard label="Pedidos no mês" icon={<Receipt className="h-4 w-4" />} loading={loading}>
-          <div className="text-2xl font-bold font-heading">{summary.monthlyOrders}</div>
-          <PeriodComparison current={summary.monthlyOrders} previous={summary.previousMonthOrders} format="number" className="mt-1" />
+        <StatCard label="Pedidos" icon={<Receipt className="h-4 w-4" />} loading={loading}>
+          <div className="text-2xl font-bold font-heading">{kpis?.total_orders ?? 0}</div>
+          <PeriodComparison current={kpis?.total_orders ?? 0} previous={kpis?.prev_total_orders ?? 0} format="number" className="mt-1" />
         </StatCard>
         <StatCard label="Ticket médio" icon={<DollarSign className="h-4 w-4" />} loading={loading}>
-          <div className="text-2xl font-bold font-heading">{formatCompactCurrency(summary.avgTicket)}</div>
-          <PeriodComparison current={summary.avgTicket} previous={summary.previousAvgTicket} format="percent" className="mt-1" />
+          <div className="text-2xl font-bold font-heading">{formatCompactCurrency(kpis?.avg_ticket ?? 0)}</div>
+          <PeriodComparison current={kpis?.avg_ticket ?? 0} previous={kpis?.prev_avg_ticket ?? 0} format="percent" className="mt-1" />
         </StatCard>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-heading">Canais</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base font-heading">Canais</CardTitle></CardHeader>
           <CardContent>
-            {chLoading ? (
-              <Skeleton className="h-[250px] w-full" />
-            ) : !channels?.length ? (
-              <p className="text-sm text-muted-foreground">Sem dados no mês atual.</p>
-            ) : (
-              <>
+            {chLoading ? <Skeleton className="h-[250px] w-full" />
+            : !channels?.length ? <p className="text-sm text-muted-foreground">Sem dados no período.</p>
+            : <>
                 <div className="h-[200px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={channels.map((r) => ({ name: getGlobalMarketplaceDisplay(r.channel_slug), value: Number(r.total_revenue) }))} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value">
+                      <Pie data={channels.map((r) => ({ name: getGlobalMarketplaceDisplay(r.channel_slug), value: Number(r.total_revenue), slug: r.channel_slug }))} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2} dataKey="value">
                         {channels.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                       </Pie>
                       <Tooltip formatter={(v) => typeof v === "number" ? formatCompactCurrency(v) : v} />
@@ -73,10 +73,11 @@ export function ClientDashboard() {
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                           <span className="truncate font-medium">{getGlobalMarketplaceDisplay(row.channel_slug)}</span>
+                          <span className="text-xs text-muted-foreground">({row.client_count} {row.client_count === 1 ? "cliente" : "clientes"})</span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 tabular-nums">
                           <span className="text-xs text-muted-foreground">{row.order_count} ped.</span>
-                          <span className="text-xs text-muted-foreground w-12 text-right">{share.toFixed(1)}%</span>
+                          <span className="text-muted-foreground w-12 text-right text-xs">{share.toFixed(1)}%</span>
                           <span className="font-semibold w-20 text-right">{formatCompactCurrency(rev)}</span>
                         </div>
                       </div>
@@ -84,21 +85,16 @@ export function ClientDashboard() {
                   })}
                 </div>
               </>
-            )}
+            }
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-heading">Logística</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base font-heading">Logística</CardTitle></CardHeader>
           <CardContent>
-            {logLoading ? (
-              <Skeleton className="h-[250px] w-full" />
-            ) : !logistics?.length ? (
-              <p className="text-sm text-muted-foreground">Sem dados de logística no mês.</p>
-            ) : (
-              <>
+            {logLoading ? <Skeleton className="h-[250px] w-full" />
+            : !logistics?.length ? <p className="text-sm text-muted-foreground">Sem dados de logística no período.</p>
+            : <>
                 <div className="h-[200px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -120,10 +116,11 @@ export function ClientDashboard() {
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                           <span className="truncate font-medium">{getGlobalLogisticsDisplay(row.logistics_slug)}</span>
+                          <span className="text-xs text-muted-foreground">({row.client_count} {row.client_count === 1 ? "cliente" : "clientes"})</span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 tabular-nums">
                           <span className="text-xs text-muted-foreground">{row.order_count} ped.</span>
-                          <span className="text-xs text-muted-foreground w-12 text-right">{share.toFixed(1)}%</span>
+                          <span className="text-muted-foreground w-12 text-right text-xs">{share.toFixed(1)}%</span>
                           <span className="font-semibold w-20 text-right">{formatCompactCurrency(rev)}</span>
                         </div>
                       </div>
@@ -131,7 +128,7 @@ export function ClientDashboard() {
                   })}
                 </div>
               </>
-            )}
+            }
           </CardContent>
         </Card>
       </div>

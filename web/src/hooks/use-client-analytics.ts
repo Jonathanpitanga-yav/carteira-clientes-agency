@@ -1,27 +1,31 @@
 import { useQuery } from "@tanstack/react-query"
 import { createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
-import { getCurrentYearMonth } from "@/hooks/use-billing"
 
 function getSalesClient() {
   return createSchemaClient("sales")
 }
 
-export type ChannelBreakdownRow = {
-  client_id: string
-  client_name: string | null
+export type DashboardKpis = {
+  total_revenue: number
+  total_orders: number
+  avg_ticket: number
+  prev_total_revenue: number
+  prev_total_orders: number
+  prev_avg_ticket: number
+}
+
+export type ChannelRow = {
   channel_slug: string
-  year_month: string
+  client_count: number
   order_count: number
   total_revenue: number
   avg_ticket: number
 }
 
-export type LogisticsBreakdownRow = {
-  client_id: string
-  client_name: string | null
+export type LogisticsRow = {
   logistics_slug: string
-  year_month: string
+  client_count: number
   order_count: number
   total_revenue: number
 }
@@ -41,39 +45,56 @@ export type AbcItemRow = {
   abc_class: "A" | "B" | "C"
 }
 
-export function useClientChannelBreakdown() {
-  const currentYm = getCurrentYearMonth()
+export type DashboardFilters = {
+  clientIds?: string[]
+  dateFrom?: string
+  dateTo?: string
+}
 
+function buildRpcParams(filters: DashboardFilters) {
+  return {
+    p_client_ids: filters.clientIds?.length ? filters.clientIds : null,
+    p_date_from: filters.dateFrom || null,
+    p_date_to: filters.dateTo || null,
+  }
+}
+
+export function useDashboardKpis(filters: DashboardFilters) {
   return useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, "channel-breakdown", currentYm],
+    queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-kpis", filters],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
-        .from("client_channel_breakdown")
-        .select("*")
-        .eq("year_month", currentYm)
-        .neq("channel_slug", "unknown")
-        .order("total_revenue", { ascending: false })
-
+        .rpc("get_dashboard_kpis", buildRpcParams(filters))
       if (error) throw error
-      return (data ?? []) as ChannelBreakdownRow[]
+      const rows = data as DashboardKpis[]
+      return rows?.[0] ?? {
+        total_revenue: 0, total_orders: 0, avg_ticket: 0,
+        prev_total_revenue: 0, prev_total_orders: 0, prev_avg_ticket: 0,
+      }
     },
   })
 }
 
-export function useClientLogisticsBreakdown() {
-  const currentYm = getCurrentYearMonth()
-
+export function useDashboardChannels(filters: DashboardFilters) {
   return useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, "logistics-breakdown", currentYm],
+    queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-channels", filters],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
-        .from("client_logistics_breakdown")
-        .select("*")
-        .eq("year_month", currentYm)
-        .order("total_revenue", { ascending: false })
-
+        .rpc("get_dashboard_channels", buildRpcParams(filters))
       if (error) throw error
-      return (data ?? []) as LogisticsBreakdownRow[]
+      return (data ?? []) as ChannelRow[]
+    },
+  })
+}
+
+export function useDashboardLogistics(filters: DashboardFilters) {
+  return useQuery({
+    queryKey: [QUERY_KEYS.ANALYTICS, "dashboard-logistics", filters],
+    queryFn: async () => {
+      const { data, error } = await getSalesClient()
+        .rpc("get_dashboard_logistics", buildRpcParams(filters))
+      if (error) throw error
+      return (data ?? []) as LogisticsRow[]
     },
   })
 }
@@ -87,7 +108,6 @@ export function useClientAbcCurve() {
         .select("*")
         .order("abc_class", { ascending: true })
         .order("total_revenue", { ascending: false })
-
       if (error) throw error
       return (data ?? []) as AbcItemRow[]
     },
@@ -96,23 +116,18 @@ export function useClientAbcCurve() {
 
 export function useClientAbcSummary() {
   const abc = useClientAbcCurve()
-
   const items = abc.data ?? []
   const aItems = items.filter((i) => i.abc_class === "A")
   const bItems = items.filter((i) => i.abc_class === "B")
   const cItems = items.filter((i) => i.abc_class === "C")
-
   const aRevenue = aItems.reduce((s, i) => s + Number(i.total_revenue), 0)
   const bRevenue = bItems.reduce((s, i) => s + Number(i.total_revenue), 0)
   const cRevenue = cItems.reduce((s, i) => s + Number(i.total_revenue), 0)
   const totalRevenue = aRevenue + bRevenue + cRevenue
-
   return {
-    items,
-    aItems, aCount: aItems.length, aRevenue,
+    items, aItems, aCount: aItems.length, aRevenue,
     bItems, bCount: bItems.length, bRevenue,
     cItems, cCount: cItems.length, cRevenue,
-    totalRevenue,
-    isLoading: abc.isLoading,
+    totalRevenue, isLoading: abc.isLoading,
   }
 }
