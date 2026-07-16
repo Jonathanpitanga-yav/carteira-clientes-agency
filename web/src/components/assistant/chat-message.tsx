@@ -1,8 +1,9 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { Bot, RefreshCw, User, AlertCircle } from "lucide-react"
+import { Bot, RefreshCw, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Markdown } from "./chat-markdown"
 import { useChatContext } from "./chat-provider"
 
 export function ChatMessage({ message, isLast }: { message: { id: string; role: "user" | "assistant"; content: string; isError?: boolean }; isLast?: boolean }) {
@@ -31,7 +32,13 @@ export function ChatMessage({ message, isLast }: { message: { id: string; role: 
                 : "bg-muted text-foreground rounded-tl-sm",
           )}
         >
-          {message.content || (
+          {message.content ? (
+            isUser ? (
+              <p>{message.content}</p>
+            ) : (
+              <Markdown content={message.content} />
+            )
+          ) : (
             <span className="inline-flex items-center gap-1.5 text-muted-foreground italic">
               <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: "150ms" }} />

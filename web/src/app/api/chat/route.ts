@@ -3,7 +3,7 @@ import { createClient, createCoreClient, createSalesClient } from "@/lib/supabas
 import { getOpenAI, CHAT_MODEL } from "@/lib/assistant/client"
 import { buildSystemPrompt } from "@/lib/assistant/context-builder"
 import { tools, executeToolCall } from "@/lib/assistant/tools"
-import type OpenAI from "openai"
+import type { ChatCompletionMessageParam } from "openai/resources/index.mjs"
 
 export async function POST(req: Request) {
   try {
@@ -28,113 +28,65 @@ export async function POST(req: Request) {
 
     const systemPrompt = await buildSystemPrompt()
     const openai = getOpenAI()
-    const encoder = new TextEncoder()
 
     const core = await createCoreClient()
     const sales = await createSalesClient()
 
-    async function handleToolCalls(
-      toolCallAccumulators: Map<number, { id: string; name: string; args: string }>,
-      contentBuffer: string,
-      controller: ReadableStreamDefaultController,
-    ): Promise<string> {
-      const toolCallEntries = [...toolCallAccumulators.entries()].sort(([a], [b]) => a - b).map(([, acc]) => acc)
-      const assistantToolCalls = toolCallEntries.map((acc) => ({
-        id: acc.id,
-        type: "function" as const,
-        function: { name: acc.name, arguments: acc.args },
-      }))
+    const apiMessages: ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ]
 
-      const toolMessages: OpenAI.Chat.ChatCompletionMessageParam[] = []
-      for (const acc of toolCallEntries) {
-        const args = JSON.parse(acc.args || "{}")
-        const result = await executeToolCall(acc.name, args, acc.id, core, sales)
+    let response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: apiMessages,
+      tools,
+      tool_choice: "auto",
+      stream: false,
+      max_tokens: 8192,
+    })
+
+    let turnCount = 0
+    while (response.choices[0]?.finish_reason === "tool_calls" && turnCount < 5) {
+      turnCount++
+      const toolCalls = response.choices[0].message.tool_calls
+      if (!toolCalls?.length) break
+
+      const toolMessages: ChatCompletionMessageParam[] = []
+      for (const tc of toolCalls) {
+        if (tc.type !== "function") continue
+        const fn = tc.function as { name: string; arguments: string }
+        const args = JSON.parse(fn.arguments)
+        const result = await executeToolCall(fn.name, args, tc.id, core, sales)
         toolMessages.push(result)
       }
 
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool_status", message: "Consultando dados..." })}\n\n`))
-
-      const followUpMsgs: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemPrompt },
-        ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-        { role: "assistant", content: contentBuffer || null, tool_calls: assistantToolCalls } as OpenAI.Chat.ChatCompletionMessageParam,
-        ...toolMessages,
-      ]
-
-      const followUpStream = await openai.chat.completions.create({
+      response = await openai.chat.completions.create({
         model: CHAT_MODEL,
-        messages: followUpMsgs,
-        stream: true,
+        messages: [
+          ...apiMessages,
+          response.choices[0].message as ChatCompletionMessageParam,
+          ...toolMessages,
+        ],
+        tools,
+        tool_choice: "auto",
+        stream: false,
         max_tokens: 8192,
       })
-
-      let responseContent = ""
-      for await (const chunk of followUpStream) {
-        const text = chunk.choices?.[0]?.delta?.content
-        if (text) {
-          responseContent += text
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: text })}\n\n`))
-        }
-      }
-
-      return responseContent
     }
+
+    const finalContent = response.choices[0]?.message?.content || "Nenhum dado encontrado para essa consulta."
 
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          const stream = await openai.chat.completions.create({
-            model: CHAT_MODEL,
-            messages: [
-              { role: "system", content: systemPrompt },
-              ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-            ],
-            tools,
-            tool_choice: "auto",
-            stream: true,
-            max_tokens: 8192,
-          })
-
-          const toolCallAccumulators: Map<number, { id: string; name: string; args: string }> = new Map()
-          let contentBuffer = ""
-
-          for await (const chunk of stream) {
-            const delta = chunk.choices?.[0]?.delta
-
-            if (delta?.content) {
-              contentBuffer += delta.content
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: delta.content })}\n\n`))
-            }
-
-            if (delta?.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const index = tc.index ?? 0
-                if (!toolCallAccumulators.has(index)) {
-                  toolCallAccumulators.set(index, { id: "", name: "", args: "" })
-                }
-                const acc = toolCallAccumulators.get(index)!
-                if (tc.id) acc.id += tc.id
-                if (tc.function?.name) acc.name += tc.function.name
-                if (tc.function?.arguments) acc.args += tc.function.arguments
-              }
-            }
-
-            if (chunk.choices?.[0]?.finish_reason === "tool_calls") {
-              contentBuffer = await handleToolCalls(toolCallAccumulators, contentBuffer, controller)
-            }
-          }
-
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
-          controller.close()
-        } catch (err) {
-          console.error("Stream error:", err)
-          const msg = err instanceof Error ? err.message : "Erro interno no processamento"
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", content: msg })}\n\n`))
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
-          } catch { /* ignore */ }
-          try { controller.close() } catch { /* ignore */ }
+        const encoder = new TextEncoder()
+        const words = finalContent.split(/(?<=\s)/)
+        for (const word of words) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: word })}\n\n`))
+          await new Promise((r) => setTimeout(r, 15))
         }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
+        controller.close()
       },
     })
 
@@ -147,6 +99,9 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     console.error("Chat API error:", err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Erro interno" }, { status: 500 })
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno no servidor" },
+      { status: 500 },
+    )
   }
 }
