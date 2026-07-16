@@ -3,6 +3,7 @@ import { Sora, Outfit } from "next/font/google"
 import { ThemeProvider } from "@/providers/theme-provider"
 import { AuthProvider } from "@/providers/auth-provider"
 import { QueryProvider } from "@/providers/query-provider"
+import { ChatProvider } from "@/components/assistant/chat-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "@/components/feedback/error-boundary"
 import "./globals.css"
@@ -39,9 +40,11 @@ export default function RootLayout({
         <QueryProvider>
           <ThemeProvider>
             <AuthProvider>
+              <ChatProvider>
               <ErrorBoundary>
                 {children}
               </ErrorBoundary>
+              </ChatProvider>
               <Toaster
                 richColors
                 closeButton

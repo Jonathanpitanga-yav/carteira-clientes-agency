@@ -1,6 +1,7 @@
 import { AuthGuard } from "@/components/layout/auth-guard"
 import { Header } from "@/components/layout/header"
 import { Sidebar } from "@/components/layout/sidebar"
+import { ChatButton } from "@/components/assistant/chat-button"
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
           <Header />
           <main className="flex-1">{children}</main>
         </div>
+        <ChatButton />
       </AuthGuard>
     </div>
   )
