@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useEffect } from "react"
-import { X, Trash2, Bot } from "lucide-react"
+import { X, Trash2, Bot, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useChatContext } from "./chat-provider"
 import { ChatMessage } from "./chat-message"
@@ -26,6 +26,7 @@ export function ChatDialog() {
           <div className="flex items-center gap-2">
             <Bot className="size-5 text-primary" />
             <span className="text-sm font-medium">Assistente YAV</span>
+            {isLoading && <Loader2 className="size-3.5 text-muted-foreground animate-spin" />}
           </div>
           <div className="flex items-center gap-1">
             {messages.length > 0 && (
@@ -49,8 +50,8 @@ export function ChatDialog() {
               </p>
             </div>
           )}
-          {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
+          {messages.map((msg, i) => (
+            <ChatMessage key={msg.id} message={msg} isLast={i === messages.length - 1} />
           ))}
           <div ref={bottomRef} />
         </div>

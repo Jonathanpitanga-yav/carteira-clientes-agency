@@ -82,49 +82,59 @@ export async function POST(req: Request) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        const stream = await openai.chat.completions.create({
-          model: CHAT_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-          ],
-          tools,
-          tool_choice: "auto",
-          stream: true,
-          max_tokens: 8192,
-        })
+        try {
+          const stream = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+            ],
+            tools,
+            tool_choice: "auto",
+            stream: true,
+            max_tokens: 8192,
+          })
 
-        const toolCallAccumulators: Map<number, { id: string; name: string; args: string }> = new Map()
-        let contentBuffer = ""
+          const toolCallAccumulators: Map<number, { id: string; name: string; args: string }> = new Map()
+          let contentBuffer = ""
 
-        for await (const chunk of stream) {
-          const delta = chunk.choices?.[0]?.delta
+          for await (const chunk of stream) {
+            const delta = chunk.choices?.[0]?.delta
 
-          if (delta?.content) {
-            contentBuffer += delta.content
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: delta.content })}\n\n`))
-          }
+            if (delta?.content) {
+              contentBuffer += delta.content
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: delta.content })}\n\n`))
+            }
 
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const index = tc.index ?? 0
-              if (!toolCallAccumulators.has(index)) {
-                toolCallAccumulators.set(index, { id: "", name: "", args: "" })
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const index = tc.index ?? 0
+                if (!toolCallAccumulators.has(index)) {
+                  toolCallAccumulators.set(index, { id: "", name: "", args: "" })
+                }
+                const acc = toolCallAccumulators.get(index)!
+                if (tc.id) acc.id += tc.id
+                if (tc.function?.name) acc.name += tc.function.name
+                if (tc.function?.arguments) acc.args += tc.function.arguments
               }
-              const acc = toolCallAccumulators.get(index)!
-              if (tc.id) acc.id += tc.id
-              if (tc.function?.name) acc.name += tc.function.name
-              if (tc.function?.arguments) acc.args += tc.function.arguments
+            }
+
+            if (chunk.choices?.[0]?.finish_reason === "tool_calls") {
+              contentBuffer = await handleToolCalls(toolCallAccumulators, contentBuffer, controller)
             }
           }
 
-          if (chunk.choices?.[0]?.finish_reason === "tool_calls") {
-            contentBuffer = await handleToolCalls(toolCallAccumulators, contentBuffer, controller)
-          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
+          controller.close()
+        } catch (err) {
+          console.error("Stream error:", err)
+          const msg = err instanceof Error ? err.message : "Erro interno no processamento"
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", content: msg })}\n\n`))
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
+          } catch { /* ignore */ }
+          try { controller.close() } catch { /* ignore */ }
         }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`))
-        controller.close()
       },
     })
 

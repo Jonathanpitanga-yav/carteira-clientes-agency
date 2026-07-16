@@ -6,6 +6,7 @@ export type Message = {
   id: string
   role: "user" | "assistant"
   content: string
+  isError?: boolean
 }
 
 type ChatContext = {
@@ -16,6 +17,7 @@ type ChatContext = {
   close: () => void
   toggle: () => void
   sendMessage: (text: string) => Promise<void>
+  retryLast: () => Promise<void>
   clearMessages: () => void
 }
 
@@ -32,6 +34,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const lastUserTextRef = useRef<string>("")
 
   const open = useCallback(() => setIsOpen(true), [])
   const close = useCallback(() => { setIsOpen(false); abortRef.current?.abort() }, [])
@@ -39,18 +42,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearMessages = useCallback(() => setMessages([]), [])
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessageFn = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return
+    lastUserTextRef.current = text
 
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text }
-    setMessages((prev) => [...prev, userMsg])
-    setIsLoading(true)
-
     const assistantId = crypto.randomUUID()
-    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }])
+
+    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }])
+    setIsLoading(true)
 
     try {
       abortRef.current = new AbortController()
+      const timeoutId = setTimeout(() => abortRef.current?.abort(), 60000)
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,9 +63,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         signal: abortRef.current.signal,
       })
 
+      clearTimeout(timeoutId)
+
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || "Erro na requisição")
+        let errMsg = "Erro na requisição"
+        try { const err = await res.json(); errMsg = err.error || errMsg } catch { errMsg = `HTTP ${res.status}` }
+        throw new Error(errMsg)
       }
 
       const reader = res.body?.getReader()
@@ -83,19 +91,41 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (data.type === "content") {
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + data.content } : m)))
           }
+          if (data.type === "error") {
+            throw new Error(data.content || "Erro no processamento")
+          }
         }
       }
+
+      setMessages((prev) => prev.map((m) => m.id === assistantId && !m.content.trim() ? { ...m, content: "Nenhum dado encontrado para essa consulta.", isError: true } : m))
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return
-      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content || "Erro ao conectar. Tente novamente." } : m)))
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: "A requisição excedeu o tempo limite. Tente novamente.", isError: true } : m))
+      } else {
+        const msg = err instanceof Error ? err.message : "Erro ao conectar"
+        setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: msg, isError: true } : m))
+      }
     } finally {
       setIsLoading(false)
       abortRef.current = null
     }
   }, [messages, isLoading])
 
+  const retryLast = useCallback(async () => {
+    const text = lastUserTextRef.current
+    if (!text) return
+
+    setMessages((prev) => {
+      const lastUserIdx = prev.findLastIndex((m) => m.role === "user")
+      if (lastUserIdx === -1) return prev
+      return prev.slice(0, lastUserIdx)
+    })
+
+    await sendMessageFn(text)
+  }, [sendMessageFn])
+
   return (
-    <ChatContext value={{ messages, isOpen, isLoading, open, close, toggle, sendMessage, clearMessages }}>
+    <ChatContext value={{ messages, isOpen, isLoading, open, close, toggle, sendMessage: sendMessageFn, retryLast, clearMessages }}>
       {children}
     </ChatContext>
   )
