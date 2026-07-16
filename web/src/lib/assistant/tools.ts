@@ -1,4 +1,3 @@
-import { createCoreClient, createSalesClient } from "@/lib/supabase/server"
 import type { ChatCompletionTool } from "openai/resources/index.mjs"
 
 export const tools: ChatCompletionTool[] = [
@@ -78,20 +77,19 @@ export const tools: ChatCompletionTool[] = [
 
 type ToolResult = { role: "tool"; tool_call_id: string; content: string }
 
-export async function executeToolCall(name: string, args: Record<string, unknown>, toolCallId: string): Promise<ToolResult> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function executeToolCall(name: string, args: Record<string, unknown>, toolCallId: string, core: any, sales: any): Promise<ToolResult> {
   try {
     let result: unknown
 
     switch (name) {
       case "get_wallet_clients": {
-        const core = await createCoreClient()
         const { data } = await core.from("clients").select("id, name, document, status").order("name")
         result = data ?? []
         break
       }
 
       case "get_client_kpis": {
-        const sales = await createSalesClient()
         const { data } = await sales.rpc("get_dashboard_kpis", {
           p_client_ids: (args.client_ids as string[]) ?? [],
           p_date_from: (args.date_from as string) ?? null,
@@ -102,20 +100,18 @@ export async function executeToolCall(name: string, args: Record<string, unknown
       }
 
       case "get_monthly_billing": {
-        const sales = await createSalesClient()
         let query = sales.from("client_monthly_billing").select("*").order("year_month", { ascending: false })
         if (args.client_ids && (args.client_ids as string[]).length > 0) {
           query = query.in("client_id", args.client_ids as string[])
         }
         if (args.date_from) query = query.gte("year_month", (args.date_from as string).slice(0, 7))
         if (args.date_to) query = query.lte("year_month", (args.date_to as string).slice(0, 7))
-        const { data } = await query.limit(50)
+        const { data } = await query.limit(60)
         result = data ?? []
         break
       }
 
       case "get_abc_items": {
-        const sales = await createSalesClient()
         let query = sales.from("client_item_abc_curve").select("*").order("abc_class").order("rank")
         if (args.client_ids && (args.client_ids as string[]).length > 0) {
           query = query.in("client_id", args.client_ids as string[])
@@ -128,9 +124,11 @@ export async function executeToolCall(name: string, args: Record<string, unknown
       }
 
       case "get_recent_orders": {
-        const sales = await createSalesClient()
-        const limit = (args.limit as number) ?? 10
-        let query = sales.from("invoices").select("id, invoice_number, issue_date, total_amount, global_status, marketplace_name, client_id").order("issue_date", { ascending: false })
+        const limit = (args.limit as number) ?? 20
+        let query = sales
+          .from("invoices")
+          .select("id, invoice_number, issue_date, total_amount, global_status, marketplace_name, carrier_name, client_id")
+          .order("issue_date", { ascending: false })
         if (args.client_ids && (args.client_ids as string[]).length > 0) {
           query = query.in("client_id", args.client_ids as string[])
         }

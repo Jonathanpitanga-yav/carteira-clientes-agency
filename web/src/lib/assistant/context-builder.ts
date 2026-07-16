@@ -15,11 +15,15 @@ export async function buildSystemPrompt(): Promise<string> {
     ? `Clientes na carteira (${clients.length}):\n${clients.map((c) => `  - ${c.name} (${c.document ?? "sem doc"}) [${c.status}]`).join("\n")}`
     : "Nenhum cliente encontrado na carteira."
 
+  const today = new Date()
+  const dateStr = today.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "long", year: "numeric" })
+
   return `Você é um assistente especializado em análise de dados de e-commerce para a YAV Digital (Seller Wallet).
 
 ## Contexto do Usuário
 - Nome: ${profile?.full_name ?? "Usuário"}
 - Funções: ${roles.join(", ")}
+- Data atual: ${dateStr} (horário de Brasília)
 
 ## Dados disponíveis
 ${walletInfo}

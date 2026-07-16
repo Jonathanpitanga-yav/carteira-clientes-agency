@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { getOpenAI } from "@/lib/assistant/client"
+import { createClient, createCoreClient, createSalesClient } from "@/lib/supabase/server"
+import { getOpenAI, CHAT_MODEL } from "@/lib/assistant/client"
 import { buildSystemPrompt } from "@/lib/assistant/context-builder"
 import { tools, executeToolCall } from "@/lib/assistant/tools"
+import type OpenAI from "openai"
 
 export async function POST(req: Request) {
   try {
@@ -22,31 +23,81 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
     }
 
-    const { messages } = await req.json() as { messages: { role: string; content: string }[] }
-    if (!messages?.length) return NextResponse.json({ error: "Mensagens obrigatórias" }, { status: 400 })
+    const { messages: rawMessages } = await req.json() as { messages: { role: string; content: string }[] }
+    if (!rawMessages?.length) return NextResponse.json({ error: "Mensagens obrigatórias" }, { status: 400 })
 
     const systemPrompt = await buildSystemPrompt()
     const openai = getOpenAI()
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      ],
-      tools,
-      tool_choice: "auto",
-      stream: true,
-      max_tokens: 4096,
-    })
-
     const encoder = new TextEncoder()
+
+    const core = await createCoreClient()
+    const sales = await createSalesClient()
+
+    async function handleToolCalls(
+      toolCallAccumulators: Map<number, { id: string; name: string; args: string }>,
+      contentBuffer: string,
+      controller: ReadableStreamDefaultController,
+    ): Promise<string> {
+      const toolCallEntries = [...toolCallAccumulators.entries()].sort(([a], [b]) => a - b).map(([, acc]) => acc)
+      const assistantToolCalls = toolCallEntries.map((acc) => ({
+        id: acc.id,
+        type: "function" as const,
+        function: { name: acc.name, arguments: acc.args },
+      }))
+
+      const toolMessages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+      for (const acc of toolCallEntries) {
+        const args = JSON.parse(acc.args || "{}")
+        const result = await executeToolCall(acc.name, args, acc.id, core, sales)
+        toolMessages.push(result)
+      }
+
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool_status", message: "Consultando dados..." })}\n\n`))
+
+      const followUpMsgs: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        { role: "assistant", content: contentBuffer || null, tool_calls: assistantToolCalls } as OpenAI.Chat.ChatCompletionMessageParam,
+        ...toolMessages,
+      ]
+
+      const followUpStream = await openai.chat.completions.create({
+        model: CHAT_MODEL,
+        messages: followUpMsgs,
+        stream: true,
+        max_tokens: 8192,
+      })
+
+      let responseContent = ""
+      for await (const chunk of followUpStream) {
+        const text = chunk.choices?.[0]?.delta?.content
+        if (text) {
+          responseContent += text
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: text })}\n\n`))
+        }
+      }
+
+      return responseContent
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
+        const stream = await openai.chat.completions.create({
+          model: CHAT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...rawMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+          ],
+          tools,
+          tool_choice: "auto",
+          stream: true,
+          max_tokens: 8192,
+        })
+
         const toolCallAccumulators: Map<number, { id: string; name: string; args: string }> = new Map()
         let contentBuffer = ""
 
-        for await (const chunk of completion) {
+        for await (const chunk of stream) {
           const delta = chunk.choices?.[0]?.delta
 
           if (delta?.content) {
@@ -68,36 +119,7 @@ export async function POST(req: Request) {
           }
 
           if (chunk.choices?.[0]?.finish_reason === "tool_calls") {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool_status", message: "Consultando dados..." })}\n\n`))
-
-            const toolMessages = []
-            for (const [, acc] of toolCallAccumulators) {
-              const args = JSON.parse(acc.args || "{}")
-              const result = await executeToolCall(acc.name, args, acc.id)
-              toolMessages.push(result)
-            }
-            toolCallAccumulators.clear()
-
-            const followUp = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                { role: "system", content: systemPrompt },
-                ...messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-                { role: "assistant", content: contentBuffer || null, tool_calls: [...toolCallAccumulators.values()].map((a) => ({ id: a.id, type: "function" as const, function: { name: a.name, arguments: a.args } })) },
-                ...toolMessages,
-              ],
-              stream: true,
-              max_tokens: 4096,
-            })
-
-            contentBuffer = ""
-            for await (const chunk2 of followUp) {
-              const text = chunk2.choices?.[0]?.delta?.content
-              if (text) {
-                contentBuffer += text
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "content", content: text })}\n\n`))
-              }
-            }
+            contentBuffer = await handleToolCalls(toolCallAccumulators, contentBuffer, controller)
           }
         }
 
