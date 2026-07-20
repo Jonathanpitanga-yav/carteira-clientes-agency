@@ -166,8 +166,9 @@ function parseOrder(o: any): ERPOrder {
   } else if (volumes[0]?.servico) {
     const servicoLabel = volumes[0].servico;
     shippingServiceExternalId = extractServiceIdFromLabel(servicoLabel);
-    shippingServiceName = servicoLabel;
-    carrierName = servicoLabel;
+    const isMagaluFulfillment = !o.notaFiscal?.id && /magalu/i.test(servicoLabel);
+    shippingServiceName = isMagaluFulfillment ? "Magalu Full" : servicoLabel;
+    carrierName = shippingServiceName;
   }
 
   const order: ERPOrder = {
@@ -192,7 +193,7 @@ function parseOrder(o: any): ERPOrder {
     carrierName,
     trackingCode: volumes[0]?.codigoRastreamento || undefined,
     trackingUrl: transporte.urlRastreamento || undefined,
-    shippingMethod: volumes[0]?.servico || transporte.formaEnvio || undefined,
+    shippingMethod: shippingServiceName || volumes[0]?.servico || transporte.formaEnvio || undefined,
     shippingMethodExternalId: shippingServiceExternalId,
     logisticsIntegrationType,
     shippingServiceExternalId,

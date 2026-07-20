@@ -90,7 +90,7 @@ export function ClientNameDialog({ erpInfo, open, onOpenChange, onComplete }: Pr
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="flex items-center gap-2 rounded-lg bg-blue-600/10 p-3 text-sm text-blue-600">
+            <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary">
               <ExternalLink className="h-4 w-4 shrink-0" />
               Após autorizar, você será redirecionado de volta automaticamente.
             </div>

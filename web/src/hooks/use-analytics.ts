@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createSchemaClient } from "@/lib/supabase/client"
 import { QUERY_KEYS } from "@/lib/constants"
 import { getCurrentYearMonth, getPreviousYearMonth } from "@/hooks/use-billing"
+import { subMonths, format } from "date-fns"
 
 function getSalesClient() {
   return createSchemaClient("sales")
@@ -43,6 +44,12 @@ export type ChannelBenchmarkRow = {
   avg_ticket: number
 }
 
+export type MonthlyTrendRow = {
+  year_month: string
+  total_gmv: number
+  total_orders: number
+}
+
 export type PortfolioSummary = {
   current: PortfolioRow | null
   previous: PortfolioRow | null
@@ -75,11 +82,36 @@ export function usePortfolioOverview(yearMonth?: string) {
   })
 }
 
-export function useClientConcentration(limit = 20) {
+export function useMonthlyTrend(months = 12) {
+  const today = new Date()
+  const yearMonths: string[] = []
+  for (let i = months - 1; i >= 0; i--) {
+    const d = subMonths(today, i)
+    yearMonths.push(format(d, "yyyy-MM"))
+  }
+
+  return useQuery({
+    queryKey: [QUERY_KEYS.ANALYTICS, "monthly-trend", months],
+    queryFn: async () => {
+      const { data, error } = await getSalesClient()
+        .from("agency_portfolio_overview")
+        .select("year_month, total_gmv, total_orders")
+        .in("year_month", yearMonths)
+        .order("year_month", { ascending: true })
+
+      if (error) throw error
+      const rows = (data ?? []) as MonthlyTrendRow[]
+      const map = new Map(rows.map((r) => [r.year_month, r]))
+      return yearMonths.map((ym) => map.get(ym) ?? { year_month: ym, total_gmv: 0, total_orders: 0 })
+    },
+  })
+}
+
+export function useClientConcentration(limit = 20, clientIds?: string[]) {
   const currentYm = getCurrentYearMonth()
 
   return useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, "concentration", currentYm, limit],
+    queryKey: [QUERY_KEYS.ANALYTICS, "concentration", currentYm, limit, clientIds],
     queryFn: async () => {
       const { data, error } = await getSalesClient()
         .from("agency_client_concentration")
@@ -89,7 +121,11 @@ export function useClientConcentration(limit = 20) {
         .limit(limit)
 
       if (error) throw error
-      return (data ?? []) as ClientConcentrationRow[]
+      let rows = (data ?? []) as ClientConcentrationRow[]
+      if (clientIds?.length) {
+        rows = rows.filter((r) => clientIds.includes(r.client_id))
+      }
+      return rows
     },
   })
 }

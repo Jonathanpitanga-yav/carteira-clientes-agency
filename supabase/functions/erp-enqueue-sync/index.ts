@@ -5,8 +5,8 @@ Deno.serve(async (req) => {
   if (cors) return cors;
 
   try {
-    const { clientIds } = await req.json();
-    console.log(`[erp-enqueue-sync] Recebido clientIds:`, JSON.stringify(clientIds));
+    const { clientIds, dateFrom, dateTo } = await req.json();
+    console.log(`[erp-enqueue-sync] Recebido clientIds:`, JSON.stringify(clientIds), `dateFrom:`, dateFrom, `dateTo:`, dateTo);
 
     if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
       return jsonResponse({ error: "clientIds é obrigatório." }, 400);
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
 
     const { data: queueItems, error: queueError } = await supabase.rpc(
       "enqueue_sync",
-      { p_app_ids: appIds }
+      { p_app_ids: appIds, p_date_from: dateFrom || null, p_date_to: dateTo || null }
     );
 
     if (queueError) {

@@ -6,22 +6,18 @@ import { useSyncQueue } from "@/hooks/use-orders"
 import { QUERY_KEYS } from "@/lib/constants"
 import { toast } from "sonner"
 
-/**
- * Componente invisível: monitora a fila de sync e emite toasts ao concluir ou falhar.
- */
 export function SyncQueueNotifier() {
   const { data: items } = useSyncQueue()
   const qc = useQueryClient()
   const statusById = useRef<Map<string, string>>(new Map())
   const initialized = useRef(false)
-
   const itemsRef = useRef(items)
   itemsRef.current = items
 
   const itemsSnapshot = useMemo(
     () =>
       items
-        ?.map((item) => `${item.id}:${item.status}:${item.error ?? ""}`)
+        ?.map((item) => `${item.id}:${item.status}:${item.synced_count ?? 0}:${item.error ?? ""}`)
         .join("|") ?? "",
     [items],
   )
@@ -46,7 +42,12 @@ export function SyncQueueNotifier() {
 
       const label = item.client_name ?? "Cliente"
       if (item.status === "completed") {
-        toast.success(`Sincronização concluída: ${label}`)
+        const count = item.synced_count ?? 0
+        if (count > 0) {
+          toast.success(`${label}: ${count} pedidos sincronizados`)
+        } else {
+          toast.success(`Sincronização concluída: ${label}`)
+        }
         qc.invalidateQueries({ queryKey: [QUERY_KEYS.ORDERS] })
       } else if (item.status === "failed") {
         toast.error(`Falha na sincronização: ${label}`, {

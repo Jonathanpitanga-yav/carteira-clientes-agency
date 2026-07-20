@@ -50,6 +50,8 @@ export type DashboardFilters = {
   clientIds?: string[]
   dateFrom?: string
   dateTo?: string
+  channelSlugs?: string[]
+  logisticsSlugs?: string[]
 }
 
 function buildRpcParams(filters: DashboardFilters) {
@@ -83,7 +85,14 @@ export function useDashboardChannels(filters: DashboardFilters) {
       const { data, error } = await getSalesClient()
         .rpc("get_dashboard_channels", buildRpcParams(filters))
       if (error) throw error
-      return (data ?? []) as ChannelRow[]
+      let rows = (data ?? []) as ChannelRow[]
+      if (filters.channelSlugs?.length) {
+        rows = rows.filter((r) => filters.channelSlugs!.includes(r.channel_slug))
+      }
+      if (filters.logisticsSlugs?.length) {
+        rows = rows.filter((r) => filters.logisticsSlugs!.includes(r.channel_slug))
+      }
+      return rows
     },
   })
 }
@@ -95,7 +104,14 @@ export function useDashboardLogistics(filters: DashboardFilters) {
       const { data, error } = await getSalesClient()
         .rpc("get_dashboard_logistics", buildRpcParams(filters))
       if (error) throw error
-      return (data ?? []) as LogisticsRow[]
+      let rows = (data ?? []) as LogisticsRow[]
+      if (filters.logisticsSlugs?.length) {
+        rows = rows.filter((r) => filters.logisticsSlugs!.includes(r.logistics_slug))
+      }
+      if (filters.channelSlugs?.length) {
+        rows = rows.filter((r) => filters.channelSlugs!.includes(r.logistics_slug))
+      }
+      return rows
     },
   })
 }
@@ -128,7 +144,11 @@ export function useDashboardAbc(filters: DashboardFilters) {
 
       const { data, error } = await query
       if (error) throw error
-      return (data ?? []) as AbcItemRow[]
+      let rows = (data ?? []) as AbcItemRow[]
+      if (filters.channelSlugs?.length) {
+        rows = rows.filter((r) => filters.channelSlugs!.includes(r.category ?? ""))
+      }
+      return rows
     },
   })
 }

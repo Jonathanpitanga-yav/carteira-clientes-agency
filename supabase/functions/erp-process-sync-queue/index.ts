@@ -100,12 +100,13 @@ Deno.serve(async (req) => {
         let synced = 0;
         let errors = 0;
         const page = 1;
-        const fromDate = dateNDaysAgo(1);
-        console.log(`[erp-process-sync-queue] Buscando pedidos desde ${fromDate} para app ${item.app_id}`);
+        const fromDate = item.date_from || dateNDaysAgo(1);
+        const toDate = item.date_to || undefined;
+        console.log(`[erp-process-sync-queue] Buscando pedidos de ${fromDate}${toDate ? " ate " + toDate : ""} para app ${item.app_id}`);
 
         const sales = supabase.schema("sales");
         try {
-          const result = await adapter.fetchOrders(accessToken, { fromDate, page });
+          const result = await adapter.fetchOrders(accessToken, { fromDate, toDate, page });
           console.log(`[erp-process-sync-queue] App ${item.app_id}: página ${page} retornou ${result.orders.length} pedidos`);
 
           const existingByExtId = new Map<string, { raw_payload: Record<string, unknown> | null }>();
@@ -157,8 +158,8 @@ Deno.serve(async (req) => {
 
         console.log(`[erp-process-sync-queue] App ${item.app_id}: ${synced} sincronizados, ${errors} erros`);
 
-        await supabase.rpc("complete_sync", { p_id: item.id, p_status: "completed" });
-        console.log(`[erp-process-sync-queue] Item ${item.id} concluído com sucesso`);
+        await supabase.rpc("complete_sync", { p_id: item.id, p_status: "completed", p_synced_count: synced });
+        console.log(`[erp-process-sync-queue] Item ${item.id} concluído com ${synced} pedidos`);
         results.push({ id: item.id, app_id: item.app_id, status: "completed", synced, errors });
       } catch (err: any) {
         console.error(`[erp-process-sync-queue] Erro fatal no item ${item.id}: ${err.message}`);

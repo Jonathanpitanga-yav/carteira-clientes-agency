@@ -10,8 +10,8 @@ import {
 
 const WARNING_THRESHOLD = 20
 
-export function ClientConcentrationChart() {
-  const { data, isLoading } = useClientConcentration(15)
+export function ClientConcentrationChart({ clientIds }: { clientIds?: string[] }) {
+  const { data, isLoading } = useClientConcentration(15, clientIds)
 
   if (isLoading) {
     return (
@@ -65,32 +65,20 @@ export function ClientConcentrationChart() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                angle={-20}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis
-                tickFormatter={(v: number) => formatCompactCurrency(v)}
-                tick={{ fontSize: 11 }}
-              />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={60} />
+              <YAxis tickFormatter={(v: number) => formatCompactCurrency(v)} tick={{ fontSize: 11 }} />
               <Tooltip
                 formatter={(value, name) => {
-                  if (name === "receita" && typeof value === "number")
-                    return [formatCompactCurrency(value), "Receita"]
+                  if (name === "receita" && typeof value === "number") return [formatCompactCurrency(value), "Receita"]
+                  if (name === "share" && typeof value === "number") return [`${value.toFixed(1)}%`, "Participação"]
+                  if (name === "pedidos") return [value, "Pedidos"]
                   return [value, name]
                 }}
                 labelFormatter={(label) => `Cliente: ${label}`}
               />
               <Bar dataKey="receita" radius={[4, 4, 0, 0]}>
                 {chartData.map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={entry.isWarning ? "#ef4444" : "#6e29f6"}
-                    fillOpacity={entry.isWarning ? 0.9 : 0.7}
-                  />
+                  <Cell key={index} fill={entry.isWarning ? "#ef4444" : "#6e29f6"} fillOpacity={entry.isWarning ? 0.9 : 0.7} />
                 ))}
               </Bar>
             </BarChart>
@@ -100,23 +88,13 @@ export function ClientConcentrationChart() {
         <div className="grid grid-cols-2 gap-3 rounded-lg border p-3 text-sm">
           <div>
             <p className="text-muted-foreground text-xs">Maior dependência</p>
-            <p className="font-semibold tabular-nums">
-              {data[0]?.client_name ?? "—"}
-            </p>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {topConcentration.toFixed(1)}% do faturamento
-            </p>
+            <p className="font-semibold tabular-nums">{data[0]?.client_name ?? "—"}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{topConcentration.toFixed(1)}% do faturamento</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">Clientes com risco</p>
-            <p className="font-semibold tabular-nums">
-              {highRisk.length}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {highRisk.length === 1
-                ? "cliente acima de 20%"
-                : "clientes acima de 20%"}
-            </p>
+            <p className="font-semibold tabular-nums">{highRisk.length}</p>
+            <p className="text-xs text-muted-foreground">{highRisk.length === 1 ? "cliente acima de 20%" : "clientes acima de 20%"}</p>
           </div>
         </div>
       </CardContent>

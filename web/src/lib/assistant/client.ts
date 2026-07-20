@@ -14,4 +14,10 @@ export function getOpenAI(): OpenAI {
   return _client
 }
 
-export const CHAT_MODEL = "deepseek-v4-flash"
+export const AVAILABLE_MODELS = [
+  { id: "deepseek-v4-flash-free", label: "DeepSeek V4 Flash Free", description: "Grátis — consultas rápidas" },
+  { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", description: "Balanceado — velocidade e qualidade" },
+  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", description: "Máxima qualidade e precisão" },
+] as const
+
+export const DEFAULT_MODEL = "deepseek-v4-flash-free"

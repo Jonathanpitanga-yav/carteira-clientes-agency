@@ -23,7 +23,7 @@ const ERPS = [
     id: "tiny",
     name: "Tiny",
     description: "ERP online para pequenas empresas",
-    color: "bg-blue-600",
+    color: "bg-violet-600",
     url: "https://api.tiny.com.br",
     available: true,
   },

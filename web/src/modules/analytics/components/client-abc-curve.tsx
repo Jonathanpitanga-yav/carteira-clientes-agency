@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useAbcSummary, useDashboardAbc } from "@/hooks/use-client-analytics"
 import type { DashboardFilters } from "@/hooks/use-client-analytics"
-import { ClientDashboardFilters } from "@/modules/analytics/components/filters/client-dashboard-filters"
+import { AnalyticsFilters } from "@/modules/analytics/components/filters/analytics-filters"
 import { RankPosition } from "@/modules/dashboard/components/rank-movement"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -42,7 +42,7 @@ export function ClientAbcCurve() {
 
   return (
     <div className="space-y-4">
-      <ClientDashboardFilters filters={filters} onChange={handleFilterChange} />
+      <AnalyticsFilters filters={filters} onChange={handleFilterChange} showLogisticsFilter={false} showChannelFilter={false} />
 
       <div className="grid gap-4 md:grid-cols-3">
         {([

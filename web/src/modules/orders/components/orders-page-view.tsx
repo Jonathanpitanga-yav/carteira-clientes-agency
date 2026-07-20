@@ -5,6 +5,7 @@ import { useOrders, type OrderFilters } from "@/hooks/use-orders"
 import { OrdersTable } from "@/modules/orders/components/orders-table"
 import { OrdersFilters } from "@/modules/orders/components/orders-filters"
 import { SyncDialog } from "@/modules/orders/components/sync-dialog"
+import { SyncStatusBadge } from "@/modules/orders/components/sync-status-badge"
 import { SyncQueueNotifier } from "@/modules/orders/components/sync-queue-notifier"
 import { PageContainer } from "@/components/layout/page-container"
 import { PageHeader } from "@/components/shared/page-header"
@@ -45,7 +46,7 @@ export function OrdersPageView({
       {showSync && <SyncQueueNotifier />}
       <div className="flex items-start justify-between gap-4">
         <PageHeader title={title} description={description} />
-        {showSync && <SyncDialog />}
+        {showSync && <div className="flex items-center gap-2"><SyncStatusBadge /><SyncDialog /></div>}
       </div>
 
       <OrdersFilters

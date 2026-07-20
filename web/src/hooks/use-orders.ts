@@ -56,6 +56,9 @@ export type SyncQueueItem = {
   completed_at: string | null
   error: string | null
   retry_count: number
+  date_from: string | null
+  date_to: string | null
+  synced_count: number | null
   client_name: string | null
   provider_name: string | null
   provider_slug: string | null
@@ -66,7 +69,7 @@ export const GLOBAL_STATUS_MAP: Record<string, { label: string; color: string }>
   draft: { label: "Rascunho", color: "bg-slate-500 text-white" },
   pending: { label: "Pendente", color: "bg-amber-500 text-white" },
   approved: { label: "Aprovado", color: "bg-emerald-600 text-white" },
-  in_production: { label: "Em preparação", color: "bg-blue-600 text-white" },
+  in_production: { label: "Em preparação", color: "bg-violet-600 text-white" },
   invoiced: { label: "Faturado", color: "bg-violet-600 text-white" },
   shipped: { label: "Enviado", color: "bg-sky-600 text-white" },
   delivered: { label: "Entregue", color: "bg-green-600 text-white" },
@@ -331,7 +334,7 @@ export function useEnqueueSync() {
   const qc = useQueryClient()
 
   return useMutation({
-    mutationFn: async (clientIds: string[]) => {
+    mutationFn: async ({ clientIds, dateFrom, dateTo }: { clientIds: string[]; dateFrom?: string; dateTo?: string }) => {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/erp-enqueue-sync`,
         {
@@ -340,7 +343,7 @@ export function useEnqueueSync() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${(await createClient().auth.getSession()).data.session?.access_token}`,
           },
-          body: JSON.stringify({ clientIds }),
+          body: JSON.stringify({ clientIds, dateFrom: dateFrom || null, dateTo: dateTo || null }),
         },
       )
 
