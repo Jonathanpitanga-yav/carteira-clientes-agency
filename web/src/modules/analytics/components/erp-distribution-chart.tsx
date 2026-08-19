@@ -10,8 +10,8 @@ import {
 } from "recharts"
 
 const ERP_COLORS = [
-  "#00F6F6", "#6e29f6", "#8B5CF6", "#EC4899", "#F59E0B",
-  "#06b6d4", "#10b981", "#f97316", "#ef4444", "#6b7280",
+  "#00F6F6", "#2F80FF", "#6E29F6", "#8B5CF6", "#EC4899",
+  "#06b6d4", "#10b981", "#F59E0B", "#ef4444", "#6b7280",
 ]
 
 export function ErpDistributionChart() {

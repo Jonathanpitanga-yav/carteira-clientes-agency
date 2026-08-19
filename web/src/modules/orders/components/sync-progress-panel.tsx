@@ -126,7 +126,7 @@ export function SyncProgressPanel({ clientName, clientId, dateFrom, dateTo, onCl
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isRunning ? (
-            <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+            <Loader2 className="h-4 w-4 animate-spin text-brand-purple" />
           ) : progress.status === "complete" ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           ) : progress.status === "error" ? (
@@ -153,7 +153,7 @@ export function SyncProgressPanel({ clientName, clientId, dateFrom, dateTo, onCl
           <span className="tabular-nums">{progress.synced} pedidos</span>
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full rounded-full bg-violet-500 transition-all duration-300"
+              className="h-full rounded-full bg-brand-purple transition-all duration-300"
               style={{ width: `${Math.min((progress.page / Math.max(progress.pages, 1)) * 100, 100)}%` }}
             />
           </div>

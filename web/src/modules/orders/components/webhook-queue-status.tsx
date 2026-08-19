@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react"
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: "Pendente", color: "bg-orange-500 text-white" },
-  processing: { label: "Processando", color: "bg-violet-500 text-white" },
+  processing: { label: "Processando", color: "bg-brand-purple text-white" },
   processed: { label: "Processado", color: "bg-emerald-600 text-white" },
   failed: { label: "Falhou", color: "bg-red-600 text-white" },
   dead_letter: { label: "Dead Letter", color: "bg-red-900 text-white" },

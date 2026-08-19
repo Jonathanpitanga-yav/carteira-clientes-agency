@@ -2,13 +2,13 @@ const { createClient } = require("@supabase/supabase-js")
 
 const supabase = createClient(
   "https://tnbruzzlgissagxsqrge.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuYnJ1enpsZ2lzc2FneHNxcmdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMxMDcsImV4cCI6MjA5OTUwOTEwN30.0lgTITQ5xnbvHKxJ0zmVxThKX9Ij7d4CbVsD4wZvQhg",
+  process.env.SUPABASE_ANON_KEY,
 )
 
 async function main() {
   const { error: loginErr } = await supabase.auth.signInWithPassword({
-    email: "jonathan.pitanga@yav.com.br",
-    password: "Admin@123456",
+    email: process.env.SUPABASE_USER_EMAIL,
+    password: process.env.SUPABASE_USER_PASSWORD,
   })
   if (loginErr) { console.error("Login:", loginErr); return }
   console.log("OK - logged in\n")

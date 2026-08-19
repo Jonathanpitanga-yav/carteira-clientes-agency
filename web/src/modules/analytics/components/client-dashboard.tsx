@@ -16,7 +16,7 @@ import {
   PieChart, Pie, Cell,
 } from "recharts"
 
-const CHART_COLORS = ["#00F6F6", "#6e29f6", "#8B5CF6", "#EC4899", "#F59E0B", "#06b6d4", "#10b981", "#f97316"]
+const CHART_COLORS = ["#00F6F6", "#2F80FF", "#6E29F6", "#8B5CF6", "#EC4899", "#06b6d4", "#10b981", "#F59E0B"]
 
 export function ClientDashboard() {
   const [filters, setFilters] = useState<DashboardFilters>({})

@@ -17,8 +17,8 @@ export function SyncStatusBadge() {
   if (recentActiveItems.length === 0) return null
 
   return (
-    <Badge variant="outline" className="gap-1.5 text-xs animate-pulse border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950">
-      <Loader2 className="h-3 w-3 animate-spin text-violet-500" />
+    <Badge variant="outline" className="gap-1.5 text-xs animate-pulse border-brand-purple/30 bg-brand-purple/10 dark:border-brand-purple/40 dark:bg-brand-purple/10">
+      <Loader2 className="h-3 w-3 animate-spin text-brand-purple" />
       <span className="tabular-nums">{recentActiveItems.length}</span>
       sincronizando
     </Badge>

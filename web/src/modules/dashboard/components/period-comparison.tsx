@@ -44,7 +44,7 @@ export function PeriodComparison({
   if (previous === 0 && current > 0) {
     return (
       <p
-        className={cn("flex items-center gap-1 text-xs font-medium text-cyan-500", className)}
+        className={cn("flex items-center gap-1 text-xs font-medium text-brand", className)}
         title="Novo no período"
       >
         {prefix && <span className="font-normal text-muted-foreground">{prefix}:</span>}
@@ -57,7 +57,7 @@ export function PeriodComparison({
   if (delta > 0) {
     return (
       <p
-        className={cn("flex items-center gap-1 text-xs font-medium text-cyan-500", className)}
+        className={cn("flex items-center gap-1 text-xs font-medium text-brand", className)}
         title={`+${formatDelta(delta, format)} vs mês anterior`}
       >
         {prefix && <span className="font-normal text-muted-foreground">{prefix}:</span>}

@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS jobs.settings (key TEXT PRIMARY KEY, value TEXT NOT N
 COMMENT ON TABLE jobs.settings IS 'Configurações internas para jobs. Ex: service_key para autenticar chamadas pg_net a edge functions.';
 
 INSERT INTO jobs.settings (key, value)
-VALUES ('service_key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuYnJ1enpsZ2lzc2FneHNxcmdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzkzMzEwNywiZXhwIjoyMDk5NTA5MTA3fQ.McUV-Lzumu0j_ITGFYFtcmnyuWm7yhdq_OlPUbXMWRY')
+VALUES ('service_key', 'REDACTED_SERVICE_KEY')
 ON CONFLICT (key) DO NOTHING;
 
 -- 6. Função chamada pelo cron para disparar o processamento

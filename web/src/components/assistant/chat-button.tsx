@@ -27,7 +27,7 @@ export function ChatButton() {
 
           <button
             onClick={toggle}
-            className="relative z-10 flex items-center rounded-full bg-gradient-to-br from-[oklch(0.62_0.2_190)] to-[oklch(0.55_0.18_265)] text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105 active:scale-95 h-12 w-12 justify-center gap-0 hover:w-auto hover:px-4 hover:gap-2.5"
+            className="relative z-10 flex items-center rounded-full bg-gradient-primary text-[#030507] shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105 active:scale-95 h-12 w-12 justify-center gap-0 hover:w-auto hover:px-4 hover:gap-2.5"
           >
             {isOpen ? <X className="size-5 shrink-0" /> : <Orbit className="size-5 shrink-0" />}
             <span className="overflow-hidden max-w-0 group-hover/btn:max-w-36 transition-all duration-300 text-sm font-medium whitespace-nowrap">

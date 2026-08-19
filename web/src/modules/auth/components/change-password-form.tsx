@@ -49,10 +49,11 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4 bg-gradient-to-br from-cyan-950/5 via-background to-purple-950/5">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-cyan-500/10 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-purple-500/10 via-transparent to-transparent pointer-events-none" />
-      <Card className="relative w-full max-w-sm border-border/50 shadow-2xl shadow-cyan-500/5 backdrop-blur-sm">
+    <div className="relative flex min-h-screen items-center justify-center p-4 bg-[#080A0E] overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(0,246,246,0.08),_transparent_55%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(110,41,246,0.10),_transparent_55%)] pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-primary" />
+      <Card className="relative w-full max-w-sm border-white/10 shadow-[0_22px_76px_rgba(0,0,0,0.30)] bg-[#11131A]">
         <CardHeader className="text-center pt-8 pb-4">
           <Logo variant="login" className="justify-center mb-3" />
           <CardTitle className="text-lg font-heading">Definir nova senha</CardTitle>

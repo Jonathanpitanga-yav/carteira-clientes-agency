@@ -30,8 +30,9 @@ function CallbackContent() {
       justifyContent: "center",
       alignItems: "center",
       minHeight: "100vh",
-      fontFamily: "system-ui, sans-serif",
-      color: "#94a3b8",
+      fontFamily: "Outfit, system-ui, sans-serif",
+      color: "#BFC3D1",
+      backgroundColor: "#080A0E",
       fontSize: "14px",
     }}>
       {params.get("erp_callback") === "success"

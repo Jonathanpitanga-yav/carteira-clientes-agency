@@ -103,7 +103,7 @@ function SidebarNav({ roles, signOut }: { roles: Role[]; signOut: () => void }) 
                           className={cn(
                             "flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200",
                             isActive
-                              ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+                              ? "bg-sidebar-accent text-brand font-semibold"
                               : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
                           )}
                         >
@@ -134,7 +134,7 @@ function SidebarNav({ roles, signOut }: { roles: Role[]; signOut: () => void }) 
       </nav>
       <div className="border-t border-sidebar-border p-3">
         {roles.length > 0 && (
-          <div className="mb-2 px-3 text-xs text-sidebar-foreground/50">
+          <div className="mb-2 px-3 text-xs font-mono uppercase tracking-wider text-sidebar-foreground/50">
             {formatRoles(roles)}
           </div>
         )}

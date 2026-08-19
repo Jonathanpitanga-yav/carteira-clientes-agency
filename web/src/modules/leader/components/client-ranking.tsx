@@ -69,7 +69,7 @@ export function ClientRanking({
                 <RankPosition rank={row.rank} prevRank={row.prev_rank}>
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
                     {position === 1 ? (
-                      <Trophy className="h-4 w-4 text-cyan-500" />
+                      <Trophy className="h-4 w-4 text-brand" />
                     ) : (
                       position
                     )}

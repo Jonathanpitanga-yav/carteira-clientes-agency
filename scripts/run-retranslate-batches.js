@@ -1,5 +1,5 @@
 const anon =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuYnJ1enpsZ2lzc2FneHNxcmdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMxMDcsImV4cCI6MjA5OTUwOTEwN30.0lgTITQ5xnbvHKxJ0zmVxThKX9Ij7d4CbVsD4wZvQhg";
+  process.env.SUPABASE_ANON_KEY;
 const url = "https://tnbruzzlgissagxsqrge.supabase.co/functions/v1/erp-retranslate-invoices";
 
 (async () => {

@@ -39,7 +39,7 @@ export function Header() {
 
       <DropdownMenu>
         <DropdownMenuTrigger className="outline-none">
-          <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
+          <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-brand/30 hover:ring-brand/50 transition-all">
             <AvatarFallback className="text-xs bg-gradient-primary text-primary-foreground">{initials}</AvatarFallback>
           </Avatar>
         </DropdownMenuTrigger>

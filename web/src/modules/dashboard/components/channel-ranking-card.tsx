@@ -14,8 +14,8 @@ const STORE_TYPE_LABELS: Record<string, string> = {
 }
 
 const STORE_TYPE_COLORS: Record<string, string> = {
-  marketplace: "bg-cyan-500",
-  ecommerce: "bg-purple-500",
+  marketplace: "bg-brand",
+  ecommerce: "bg-brand-purple",
 }
 
 const STORE_TYPE_ICONS: Record<string, typeof Store> = {
