@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/sonner"
 import { ErrorBoundary } from "@/components/feedback/error-boundary"
 import "./globals.css"
 
+export const dynamic = "force-dynamic"
+
 const sora = Sora({
   variable: "--font-sora",
   subsets: ["latin"],
